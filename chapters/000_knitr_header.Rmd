@@ -1,6 +1,4 @@
 ```{r, echo=FALSE, warning=FALSE}
-suppressPackageStartupMessages(library(magrittr, quietly = TRUE))
-suppressPackageStartupMessages(library(pryr, quietly = TRUE))
 suppressPackageStartupMessages(library(ggplot2, quietly = TRUE))
 suppressPackageStartupMessages(library(knitr, quietly = TRUE))
 suppressPackageStartupMessages(library(rlang, quietly = TRUE))

@@ -1,6 +1,7 @@
 
 CHAPTERS := 000_header.md \
-			01_Introduction.md \
+			00_Introduction.md \
+			01_Metaprogramming_and_tidyeval.md \
 			02_List_comprehension.md \
 			03_Pattern_matching.md \
 			xx_conclusions.md
