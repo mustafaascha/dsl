@@ -3,8 +3,7 @@ PANDOC := pandoc
 
 PANDOC_OPTS_ALL :=  -S --toc \
 					--top-level-division=chapter \
-					--filter pandoc-crossref \
-					--filter pandoc-citeproc
+					--filter pandoc-crossref
 PANDOC_EPUB_OPTS := $(PANDOC_OPTS_ALL) \
 					--default-image-extension=png \
 					-t epub3 --toc-depth=1 \
