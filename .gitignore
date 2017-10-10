@@ -2,6 +2,9 @@ pdf_book/*.md
 pdf_book/book.pdf
 book.pdf
 
+ebook/*.md
+ebook/book.epub
+book.epub
 
 # History files
 .Rhistory
