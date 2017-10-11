@@ -1,9 +1,11 @@
 pdf_book/*.md
 pdf_book/book.pdf
+pdf_book/figures
 book.pdf
 
 ebook/*.md
 ebook/book.epub
+ebook/figures
 book.epub
 
 # History files
