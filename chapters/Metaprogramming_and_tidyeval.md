@@ -1,2 +1,2 @@
-# Metaprogramming and `tidyeval`
+# Metaprogramming and `tidyeval` {#sec:metaprogramming}
 

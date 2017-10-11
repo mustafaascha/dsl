@@ -1,3 +1,3 @@
 
-# Matrix expressions
+# Matrix expressions {#sec:matrix-expressions}
 

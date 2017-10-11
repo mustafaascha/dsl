@@ -1,3 +1,3 @@
 
-# Functions and operators
+# Functions, classes and operators
 
