@@ -10,7 +10,8 @@ microbenchmark((A %*% B) %*% C,
 
 
 m <- function(data, nrow, ncol) {
-  structure(matrix(data, nrow = nrow, ncol = ncol),
+  structure(list(data = matrix(data, nrow = nrow, ncol = ncol),
+                 nrow = nrow, ncol = ncol),
             class = "matrix_expr")
 }
 
@@ -19,7 +20,7 @@ B <- m(1:9, nrow = 3, ncol = 3)
 C <- m(1:15, nrow = 3, ncol = 5)
 
 `*.matrix_expr` <- function(A, B) {
-  structure(list(left = A, right = B), 
+  structure(list(left = A, right = B, nrow = A$nrow, ncol = B$ncol), 
             class = c("matrix_mult", "matrix_expression"))
 }
 

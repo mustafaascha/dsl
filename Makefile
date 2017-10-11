@@ -1,9 +1,11 @@
 
 CHAPTERS := 000_header.md \
-			00_Introduction.md \
-			01_Metaprogramming_and_tidyeval.md \
-			02_List_comprehension.md \
-			03_Pattern_matching.md \
+			Introduction.md \
+			Functions_expressions_operators.md \
+			Matrix_expressions.md \
+			Metaprogramming_and_tidyeval.md \
+			List_comprehension.md \
+			Pattern_matching.md \
 			xx_conclusions.md
 
 
