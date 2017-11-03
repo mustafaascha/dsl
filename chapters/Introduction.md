@@ -1,5 +1,5 @@
 
-# Introduction
+## Introduction
 
 This book gives an introduction to embedded domain specific languages in R. The term *domain specific languages,* or DSL, refers to programming languages specialised for a given purpose, as opposed to general purpose programming languages. Domain specific languages ideally give you a precise way of specifying tasks you want to do and goals you want to achieve within a specialised context. Regular expressions is one example, where you have a specialised language to express patterns of text. You can use this domain specific language to define text strings to search for or specify rules for modifying text. Regular expressions are often considered very hard to read, but they do provide a very powerful language for describing text patterns. Another example of a domain specific language is SQL---a language specialised for extracting from and modifying in a relational data base. With SQL, you have a powerful domain specific language in which you can specify rules for which data points in a data base you want to access or modify.
 
@@ -103,6 +103,6 @@ The automatic solution is only slightly slower than the optimal solution and abo
 
 Notice that this is achieved without any fancy meta programming. We simply combine object-orientation and operator overloading. Many embedded domain specific languages can be constructed in this way, and this is what we will explore first in this book, starting in the next chapter.
 
-## Who this book is for
+### Who this book is for
 
 This book is aimed at experienced R programmers. Some of the concepts we cover in this book are advanced, so at the very least you should be familiar with functional and object-oriented programming in R (although the next chapter will give you a reminder of the object-oriented programming features we will use). It will be helpful to have some experience with meta programming, but [Chapter @sec:metaprogramming] gives a crash course in the features we will use in this book, so you should be able to pick it up with a little effort from there.

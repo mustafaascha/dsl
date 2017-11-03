@@ -2,7 +2,7 @@
 PANDOC := pandoc
 
 PANDOC_OPTS_ALL :=  -S --toc \
-					--top-level-division=chapter \
+					--top-level-division=part \
 					--filter pandoc-crossref
 PANDOC_EPUB_OPTS := $(PANDOC_OPTS_ALL) \
 					--default-image-extension=png \
@@ -11,7 +11,7 @@ PANDOC_EPUB_OPTS := $(PANDOC_OPTS_ALL) \
 
 EPUB_CHAPTERS := $(foreach chapter,$(CHAPTERS),$(chapter))
 
-book.epub: $(EPUB_CHAPTERS)
+book.epub: $(EPUB_CHAPTERS) Makefile ../Makefile
 	$(PANDOC) $(PANDOC_EPUB_OPTS) -o $@ $(EPUB_CHAPTERS)
 
 

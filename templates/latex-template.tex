@@ -2,13 +2,14 @@
 \nonzeroparskip
 \setlength{\parindent}{0pt}
 
-\usepackage{trajan}
+\usepackage{utopia}
 
-\usepackage{amssymb,amsmath}
 \usepackage{graphicx}
 \usepackage[protrusion=true,expansion=true]{microtype}
-\usepackage[pass, paperwidth=7in, paperheight=10in, bindingoffset=.75in]{geometry}
-\usepackage{lmodern}
+\usepackage[pass, paperwidth=6in, paperheight=9in, bindingoffset=.75in]{geometry}
+\setlength{\pdfpagewidth}{\paperwidth}
+\setlength{\pdfpageheight}{\paperheight}
+
 %\usepackage{listings}
 $if(tables)$
 \usepackage{longtable,booktabs}
@@ -17,14 +18,11 @@ $endif$
 \usepackage{fixltx2e}
 \usepackage{textcomp}
 
+\setsecnumdepth{chapter}
 
-\usepackage{titlesec}
-\titleformat{name=\chapter}[display]
-  {\bfseries\large}
-  {\titlerule}
-  {-12ex}
-  {\filleft\MakeUppercase\sffamily\huge}[\vspace{3ex}]
-\titlespacing*{\chapter}{0pt}{120pt}{6pt}
+\setlength\cftpartnumwidth{3em}
+\setlength\cftchapternumwidth{3em}
+\setlength\cftsectionindent{3em}
 \renewcommand\contentsname{Table of Contents}
 
 \usepackage[unicode=true]{hyperref}
@@ -58,10 +56,9 @@ $endif$
 
 \renewcommand{\href}[2]{#2\footnote{\url{#1}}}
 
-
-\setcounter{secnumdepth}{0}
-
 \begin{document}
+
+\frontmatter
 
 %----------------------------------------------------------------------------------------
 %	TITLE PAGE
@@ -70,9 +67,9 @@ $endif$
 \begingroup
 \thispagestyle{empty}
 {\bfseries\sffamily\noindent
-$if(series)$ {\Large $series$}\\[50pt]$endif$ % Subtitle
+$if(series)$ {\large $series$}\\[50pt]$endif$ % Subtitle
 {\huge $title$}\\[35pt] % Book title
-{\huge $for(author)$$author$$sep$\\$endfor$} % Author name
+{\Large $for(author)$$author$$sep$\\$endfor$} % Author name
 }
 \vfill
 \endgroup
@@ -109,6 +106,7 @@ $endif$
 %	BODY
 %----------------------------------------------------------------------------------------
 
+\mainmatter
 \pagestyle{Ruled}
 $body$
 

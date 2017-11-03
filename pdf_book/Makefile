@@ -2,7 +2,7 @@
 PANDOC := pandoc
 
 PANDOC_OPTS_ALL :=  -S --toc \
-					--top-level-division=chapter \
+					--top-level-division=part \
 					--filter pandoc-crossref
 PANDOC_PDF_OPTS := $(PANDOC_OPTS_ALL) \
 					--default-image-extension=pdf \
@@ -13,7 +13,7 @@ PANDOC_PRINT_OPTS := $(PANDOC_PDF_OPTS) --no-highlight
 
 PDF_CHAPTERS := $(foreach chapter,$(CHAPTERS),$(chapter))
 
-book.pdf: $(PDF_CHAPTERS)
+book.pdf: $(PDF_CHAPTERS) Makefile ../Makefile ../templates/latex-template.tex
 	$(PANDOC) $(PANDOC_PDF_OPTS) -o $@ $(PDF_CHAPTERS)
 
 print_book.pdf: $(PDF_CHAPTERS)

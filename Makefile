@@ -1,26 +1,29 @@
 
 CHAPTERS := 000_header.md \
 			Introduction.md \
-			Functions_expressions_operators.md \
+			\
+			part_embedded_languages.md \
 			Matrix_expressions.md \
-			Metaprogramming_and_tidyeval.md \
-			List_comprehension.md \
-			Pattern_matching.md \
+			Components_of_a_language.md \
+			\
+			part_parsing.md \
+			Functions_expressions_operators.md \
+			\
+			part_evaluating.md \
+			Environments_and_expressions.md \
+			List_comprehension_and_pattern_matching.md \
+			\
 			xx_conclusions.md
 
 
 SOURCE_CHAPTERS := $(foreach chapter,$(CHAPTERS),chapters/$(chapter))
 
 
-book.pdf: $(SOURCE_CHAPTERS) Makefile
+book.pdf: $(SOURCE_CHAPTERS) Makefile pdf_book/Makefile templates/latex-template.tex
 	(cd pdf_book && make CHAPTERS="$(CHAPTERS)")
 	cp pdf_book/book.pdf book.pdf
 
-print_book.pdf: $(SOURCE_CHAPTERS) Makefile pdf_book/Makefile
-	(cd pdf_book && make print_book.pdf CHAPTERS="$(CHAPTERS)")
-	cp pdf_book/print_book.pdf print_book.pdf
-
-book.epub:  $(SOURCE_CHAPTERS) Makefile
+book.epub:  $(SOURCE_CHAPTERS) Makefile ebook/Makefile
 	(cd ebook && make CHAPTERS="$(CHAPTERS)")
 	cp ebook/book.epub book.epub
 
@@ -29,7 +32,7 @@ all: book.pdf book.epub
 book.mobi: book.epub
 	./kindlegen book.epub -o book.mobi
 
-all: book.pdf book.epub book.mobi print_book.pdf
+all: book.pdf book.epub book.mobi
 
 clean:
 	rm book.pdf book.epub book.mobi
