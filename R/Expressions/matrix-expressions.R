@@ -5,22 +5,22 @@ D <- matrix(1, nrow = 500, ncol = 400)
 
 
 library(microbenchmark)
-res <- microbenchmark(A %*% B %*% C %*% D,
-                     ((A %*% B) %*% C) %*% D,
-                     (A %*% (B %*% C)) %*% D,
-                     (A %*% B) %*% (C %*% D),
-                     A %*% (B %*% (C %*% D)),
-                     A %*% ((B %*% C) %*% D))
-options(microbenchmark.unit="relative")
-print(res, signif = 3, order = "mean")
+#res <- microbenchmark(A %*% B %*% C %*% D,
+#                     ((A %*% B) %*% C) %*% D,
+#                     (A %*% (B %*% C)) %*% D,
+#                     (A %*% B) %*% (C %*% D),
+#                     A %*% (B %*% (C %*% D)),
+#                     A %*% ((B %*% C) %*% D))
+#options(microbenchmark.unit="relative")
+#print(res, signif = 3, order = "mean")
 
+## Parsing #######################################################
 m <- function(data) {
-  def_expr <- deparse(substitute(data))
   structure(data, 
             nrow = nrow(data),
             ncol = ncol(data),
-            def_expr = def_expr,
-            class = c("matrix_expr", class(data)))
+            def_expr = deparse(substitute(data)),
+            class = c("matrix_data", "matrix_expr", class(data)))
 }
 matrix_mult <- function(A, B) {
   structure(list(left = A, right = B),
@@ -29,6 +29,14 @@ matrix_mult <- function(A, B) {
             class = c("matrix_mult", "matrix_expr"))
 }
 
+
+`*.matrix_expr` <- function(A, B) {
+  matrix_mult(A, B)
+}
+
+
+
+## Helper functions ##############################################
 dim.matrix_expr <- function(x) {
   c(attr(x, "nrow"), attr(x, "ncol"))
 }
@@ -39,18 +47,14 @@ toString.matrix_expr <- function(x, ...) {
 toString.matrix_mult <- function(x, ...) {
   paste0("(", toString(x$left), " * ", toString(x$right), ")")
 }
-
 print.matrix_expr <- function(x, ...) {
   print(toString(x))
 }
 
-`*.matrix_expr` <- function(A, B) {
-  matrix_mult(A, B)
-}
 
 
 
-
+## Evaluating ####################################################
 backtrack_matrix_mult <- function(i, j, dims, tbl, matrices) {
   if (i == j) {
     matrices[[i]]
@@ -83,17 +87,13 @@ arrange_optimal_matrix_mult <- function(matrices) {
   backtrack_matrix_mult(1, n, dims, tbl, matrices)  
 }
 
+count_mult_components <- function(expr) UseMethod("count_mult_components")
+count_mult_components.default <- function(expr) 1
+count_mult_components.matrix_mult <- function(expr)
+  count_mult_components(expr$left) + count_mult_components(expr$right)
 
-
-count_basic_matrices <- function(matrix_expr) {
-  if (inherits(matrix_expr, "matrix_mult")) {
-    count_basic_matrices(matrix_expr$left) + count_basic_matrices(matrix_expr$right)
-  } else {
-    1
-  }
-}
 collect_basic_matrices <- function(matrix_expr) {
-  n <- count_basic_matrices(matrix_expr)
+  n <- count_mult_components(matrix_expr)
   matrices <- vector("list", length = n)
   i <- 1
   collect <- function(matrix_expr) {
@@ -109,34 +109,44 @@ collect_basic_matrices <- function(matrix_expr) {
   matrices
 }
 
-rearrange_matrix_mult <- function(expr) {
-  if (inherits(expr, "matrix_mult")) {
-    matrices <- collect_basic_matrices(expr)
-    arrange_optimal_matrix_mult(matrices)
-  } else {
-    expr
-  }
+rearrange_matrix_expr <- function(expr) UseMethod("rearrange_matrix_expr")
+rearrange_matrix_expr.default <- function(expr) expr
+rearrange_matrix_expr.matrix_mult <- function(expr) {
+  matrices <- collect_basic_matrices(expr)
+  arrange_optimal_matrix_mult(matrices)
 }
 
-eval_matrix_mult <- function(expr) {
-  if (inherits(expr, "matrix_mult")) {
-    eval_matrix_mult(expr$left) %*% eval_matrix_mult(expr$right)
-  } else {
-    expr
-  }
+eval_matrix_expr <- function(expr) UseMethod("eval_matrix_expr")
+eval_matrix_expr.matrix_data <- function(expr) expr
+eval_matrix_expr.matrix_mult <- function(expr) {
+  eval_matrix_expr(expr$left) %*% eval_matrix_expr(expr$right)
 }
 
-expr1 <- m(A) * m(B) * m(C) * m(D)
-expr1
-expr2 <- rearrange_matrix_mult(expr1)
-expr2
+## Forcing evaluation... #######################################
+v <- function(expr) eval_matrix_expr(rearrange_matrix_expr(expr))
+
+library(magrittr)
+v2 <- . %>% rearrange_matrix_expr %>% eval_matrix_expr
+
+`%.%` <- function(g, f) function(...) g(f(...))
+v3 <- eval_matrix_expr %.% rearrange_matrix_expr
+
+
+
+## Testing ########################################################
+
+expr <- m(A) * m(B) * m(C) * m(D)
+#microbenchmark(v(expr), v2(expr), v3(expr))
+
+v(m(A) * m(B) * m(C) * m(D))
+
+#microbenchmark(A %*% B %*% C %*% D,
+#               eval_matrix_mult(expr1),
+#               (A %*% B) %*% (C %*% D),
+#               eval_matrix_mult(expr2))
+
 
 microbenchmark(A %*% B %*% C %*% D,
-               eval_matrix_mult(expr1),
                (A %*% B) %*% (C %*% D),
-               eval_matrix_mult(expr2))
-
-v <- function(expr) eval_matrix_mult(rearrange_matrix_mult(expr))
-
-microbenchmark(A %*% B %*% C %*% D,
                v(m(A) * m(B) * m(C) * m(D)))
+
