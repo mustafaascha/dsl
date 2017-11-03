@@ -113,7 +113,7 @@ source("../R/Expressions/introduction-matrix-expressions.R")
 
 ```{r}
 v <- function(expr)
-	eval_matrix_mult(rearrange_matrix_mult(expr))
+	eval_matrix_expr(rearrange_matrix_expr(expr))
 ```
 
 We can compare this automatic parenthesis setting procedure with the default evaluation and the optimal evaluation order we saw above:
