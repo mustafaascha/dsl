@@ -1,7 +1,7 @@
 pdf_book/*.md
 pdf_book/book.pdf
 pdf_book/figures
-pdf_book/cache/__packages
+pdf_book/cache/*
 book.pdf
 
 ebook/*.md
