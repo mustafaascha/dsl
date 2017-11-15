@@ -106,8 +106,6 @@ except that the former expression actually only constructs a data structure repr
 When we need to evaluate a matrix multiplication, we want to analyse the delayed evaluation and rearrange the multiplication to get the optimal performance. In [Chapter @sec:matrix-expressions] we will implement the functions `rearrange_matrix_mult` and `eval_matrix_mult` that does this. Here, we just define a function, `v`, for evaluating a matrix multiplication:
 
 ```{r, echo=FALSE}
-library(microbenchmark) # necessary because the loading above
-                        # is cached
 source("../R/Expressions/introduction-matrix-expressions.R")
 ```
 
