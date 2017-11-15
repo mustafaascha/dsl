@@ -32,9 +32,9 @@ theme_set(theme_bw() +
 #endif
 
 
-options(width = 50,
-        str = strOptions(vec.len = 3,
-                         strict.width = "cut"))
+#options(width = 50,
+#        str = strOptions(vec.len = 3,
+#                         strict.width = "cut"))
 
 set.seed(5)
 

@@ -63,9 +63,6 @@ toString.matrix_mult <- function(x, ...) {
 toString.matrix_sum <- function(x, ...) {
   paste0("(", toString(x$left), " + ", toString(x$right), ")")
 }
-toString.matrix_3sum <- function(x, ...) {
-  paste0("(", toString(x$A), " 3+3 ", toString(x$B), " 3+3 ", toString(x$C), ")")
-}
 print.matrix_expr <- function(x, ...) {
   print(toString(x))
 }
@@ -148,6 +145,10 @@ matrix_3sum <- function(A, B, C) {
             class = c("matrix_3sum", "matrix_expr"))
 }
 
+toString.matrix_3sum <- function(x, ...) {
+  paste0("(", toString(x$A), " 3+3 ", toString(x$B), " 3+3 ", toString(x$C), ")")
+}
+
 rearrange_matrix_expr.matrix_sum <- function(expr) {
   if (inherits(expr$left, "matrix_sum")) {
     new_expr <- matrix_3sum(expr$left$left, expr$left$right, expr$right)
@@ -167,15 +168,6 @@ rearrange_matrix_expr.matrix_3sum <- function(expr) {
               rearrange_matrix_expr(expr$C))
 }
 
-sum3 <- function(A, B, C) {
-  result <- matrix(0, nrow = nrow(A), ncol = ncol(A))
-  for (i in seq_along(nrow(A))) {
-    for (j in seq_along(ncol(A))) {
-      result[i,j] <- A[i,j] + B[i,j] + C[i,j]
-    }
-  }
-  result
-}
 
 
 ## Evaluating ####################################################
@@ -187,6 +179,17 @@ eval_matrix_expr.matrix_mult <- function(expr)
   eval_matrix_expr(expr$left) %*% eval_matrix_expr(expr$right)
 eval_matrix_expr.matrix_sum <- function(expr)
   eval_matrix_expr(expr$left) + eval_matrix_expr(expr$right)
+
+sum3 <- function(A, B, C) {
+  result <- matrix(0, nrow = nrow(A), ncol = ncol(A))
+  for (i in seq_along(nrow(A))) {
+    for (j in seq_along(ncol(A))) {
+      result[i,j] <- A[i,j] + B[i,j] + C[i,j]
+    }
+  }
+  result
+}
+
 eval_matrix_expr.matrix_3sum <- function(expr)
   sum3(eval_matrix_expr(expr$A),
        eval_matrix_expr(expr$B),
