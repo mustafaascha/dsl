@@ -25,14 +25,12 @@ m <- function(data) {
             class = c("matrix_data", "matrix_expr"))
 }
 matrix_mult <- function(A, B) {
-  stopifnot(ncol(A) == nrow(B))
   structure(list(left = A, right = B),
             nrow = nrow(A),
             ncol = ncol(B),
             class = c("matrix_mult", "matrix_expr"))
 }
 matrix_sum <- function(A, B) {
-  stopifnot(dim(A) == dim(B))
   structure(list(left = A, right = B),
             nrow = nrow(A),
             ncol = ncol(B),
@@ -41,9 +39,11 @@ matrix_sum <- function(A, B) {
 
 
 `*.matrix_expr` <- function(A, B) {
+  stopifnot(ncol(A) == nrow(B))
   matrix_mult(A, B)
 }
 `+.matrix_expr` <- function(A, B) {
+  stopifnot(dim(A) == dim(B))
   matrix_sum(A, B)
 }
 
@@ -62,6 +62,9 @@ toString.matrix_mult <- function(x, ...) {
 }
 toString.matrix_sum <- function(x, ...) {
   paste0("(", toString(x$left), " + ", toString(x$right), ")")
+}
+toString.matrix_3sum <- function(x, ...) {
+  paste0("(", toString(x$A), " 3+3 ", toString(x$B), " 3+3 ", toString(x$C), ")")
 }
 print.matrix_expr <- function(x, ...) {
   print(toString(x))
@@ -137,6 +140,43 @@ rearrange_matrix_expr.matrix_mult <- function(expr) {
   arrange_optimal_matrix_mult(matrices)
 }
 
+## Sum optimisation ##############################################
+matrix_3sum <- function(A, B, C) {
+  structure(list(A = A, B = B, C = C),
+            nrow = nrow(A),
+            ncol = ncol(A),
+            class = c("matrix_3sum", "matrix_expr"))
+}
+
+rearrange_matrix_expr.matrix_sum <- function(expr) {
+  if (inherits(expr$left, "matrix_sum")) {
+    new_expr <- matrix_3sum(expr$left$left, expr$left$right, expr$right)
+    rearrange_matrix_expr(new_expr)
+  } else if (inherits(expr$right, "matrix_sum")) {
+    new_expr <- matrix_3sum(expr$left, expr$right$left, expr$right$right)
+    rearrange_matrix_expr(new_expr)
+  } else {
+    matrix_sum(rearrange_matrix_expr(expr$left),
+               rearrange_matrix_expr(expr$right))  
+  }
+}
+
+rearrange_matrix_expr.matrix_3sum <- function(expr) {
+  matrix_3sum(rearrange_matrix_expr(expr$A),
+              rearrange_matrix_expr(expr$B),
+              rearrange_matrix_expr(expr$C))
+}
+
+sum3 <- function(A, B, C) {
+  result <- matrix(0, nrow = nrow(A), ncol = ncol(A))
+  for (i in seq_along(nrow(A))) {
+    for (j in seq_along(ncol(A))) {
+      result[i,j] <- A[i,j] + B[i,j] + C[i,j]
+    }
+  }
+  result
+}
+
 
 ## Evaluating ####################################################
 eval_matrix_expr <- function(expr) 
@@ -147,6 +187,10 @@ eval_matrix_expr.matrix_mult <- function(expr)
   eval_matrix_expr(expr$left) %*% eval_matrix_expr(expr$right)
 eval_matrix_expr.matrix_sum <- function(expr)
   eval_matrix_expr(expr$left) + eval_matrix_expr(expr$right)
+eval_matrix_expr.matrix_3sum <- function(expr)
+  sum3(eval_matrix_expr(expr$A),
+       eval_matrix_expr(expr$B),
+       eval_matrix_expr(expr$C))
 
 ## Evaluation function... #######################################
 v <- function(expr) eval_matrix_expr(rearrange_matrix_expr(expr))
@@ -162,7 +206,7 @@ C <- matrix(1, nrow = 30, ncol = 500)
 D <- matrix(1, nrow = 500, ncol = 400)
 X <- matrix(1, nrow = 400, ncol = 400)
 
-expr <- m(A) * m(B) * m(C) * m(D) * (m(X) + m(A) * m(B) * m(C) * m(D))
+expr <- m(A) * m(B) * m(C) * m(D) * (m(X) + m(A) * m(B) * m(C) * m(D) + m(X))
 expr
 rearrange_matrix_expr(expr)
 
@@ -180,3 +224,5 @@ rearrange_matrix_expr(expr)
 #               (A %*% B) %*% (C %*% D),
 #               v(m(A) * m(B) * m(C) * m(D)))
 
+#microbenchmark(A %*% B %*% C %*% D %*% (X + A %*% B %*% C %*% D + X),
+#               v(m(A) * m(B) * m(C) * m(D) * (m(X) + m(A) * m(B) * m(C) * m(D) + m(X))))
