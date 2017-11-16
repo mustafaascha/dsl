@@ -48,7 +48,7 @@ toString.matrix_sum <- function(x, ...) {
   paste0("(", toString(x$left), " + ", toString(x$right), ")")
 }
 print.matrix_expr <- function(x, ...) {
-  print(toString(x))
+  cat(toString(x), "\\n")
 }
 ```
 
@@ -111,6 +111,8 @@ build_matrix_expr <- function(expr) {
     return(substitute(m(name), list(name = expr)))
   
   if (is.call(expr)) {
+    if (expr[[1]] == as.name("(")) 
+      return(build_matrix_expr(expr[[2]]))
     if (expr[[1]] == as.name("*") || expr[[1]] == as.name("%*%"))
       return(call('*', 
                   build_matrix_expr(expr[[2]]), 
@@ -125,7 +127,7 @@ build_matrix_expr <- function(expr) {
 }
 ```
 
-In this implementation, we consider both `*` and `%*%` matrix multiplication, just so we would consider an R expression that actually uses matrix multiplication as such.
+In this implementation, we consider both `*` and `%*%` matrix multiplication, just so we would consider an R expression that actually uses matrix multiplication as such. Notice also that we consider calls that are parentheses. Parentheses are also function calls in R, and if we want to allow our language to use parentheses we have to deal with them---as here, where we just continue the recursion. We didn't have to worry about that when we explicitly wrote expressions using `m` and operator overloading, because there R already took care of giving parentheses the right semantics.
 
 For this function to work, it needs a so-called "quoted" expression to work with. If we write a raw expression in R, then R will try to evaluate it before we can manipulate it. We will get an error before we even get to rewriting the expression.
 
@@ -177,6 +179,8 @@ As an alternative, we can build the matrix expression directly using our constru
 ```{r}
 build_matrix_expr <- function(expr, env) {
   if (is.call(expr)) {
+    if (expr[[1]] == as.name("(")) 
+      return(build_matrix_expr(expr[[2]], env))
     if (expr[[1]] == as.name("*") || expr[[1]] == as.name("%*%"))
       return(matrix_mult(build_matrix_expr(expr[[2]], env), 
                          build_matrix_expr(expr[[3]], env)))
@@ -185,12 +189,12 @@ build_matrix_expr <- function(expr, env) {
                         build_matrix_expr(expr[[3]], env)))
   }
   data_matrix <- m(eval(expr, env))
-  attr(data_matrix, "def_expr") <- expr
+  attr(data_matrix, "def_expr") <- deparse(expr)
   data_matrix
 }
 ```
 
-Most of this function should be self-explanatory, except for where we explicitly set the `def_expr` attribute of a data matrix. This is the attribute be use for pretty printing, and when we call the `m` function it is set to the literate expression we called `m` with. This would be `eval(expr, env)` for all matrices we create with this function. To avoid that, we explicitly set it to the (quoted) expression we use in the evaluation.
+Most of this function should be self-explanatory, except for where we explicitly set the `def_expr` attribute of a data matrix. This is the attribute be use for pretty printing, and when we call the `m` function it is set to the literate expression we called `m` with. This would be `eval(expr, env)` for all matrices we create with this function. To avoid that, we explicitly set it to the expression we use in the evaluation.
 
 Once again, we can wrap the function in another that gets us the quoted expression and provide the environment we should evaluate expressions in.
 
@@ -200,66 +204,234 @@ parse_matrix_expr <- function(expr) {
   build_matrix_expr(expr, parent.frame())
 }
 
-parse_matrix_expr(A * B)
+parse_matrix_expr(A * B + matrix(1, nrow = 10, ncol = 10))
 ```
 
 There is much more to manipulating expressions, and especially to how they are evaluated, but we return to that in later chapters.
 
 ### Expression manipulation
 
-#### Optimising addition
+Our goal for writing this matrix DSL is to optimise evaluation of these matrix expressions. There are several optimisations we can consider, but R's matrix implementation is reasonably efficient already, so it is hard to beat if we try to replace any computations by our own implementations---at least as long as we implement our alternatives in R. Therefore, it makes sense to focus simply on arithmetic rewriting of expressions. 
 
-```{r, cache=TRUE}
-sum3 <- function(A, B, C) {
-  result <- matrix(0, nrow = nrow(A), ncol = ncol(A))
-  for (i in seq_along(nrow(A))) {
-    for (j in seq_along(ncol(A))) {
-      result[i,j] <- A[i,j] + B[i,j] + C[i,j]
-    }
-  }
-  result
-}
-
-A <- matrix(1, nrow = 400, ncol = 3000)
-res <- microbenchmark(A + A + A, sum3(A, A, A))
-options(microbenchmark.unit="relative")
-print(res, signif = 3, order = "mean")
-```
+We can rewrite expressions recursively, and using a generic function with specialisations for the three concrete classes we have, a template (that doesn't do anything yet) would look like this:
 
 ```{r}
-matrix_3sum <- function(A, B, C) {
-  structure(list(A = A, B = B, C = C),
-            nrow = nrow(A),
-            ncol = ncol(A),
-            class = c("matrix_3sum", "matrix_expr"))
-}
+rearrange_matrix_expr <- function(expr) 
+  UseMethod("rearrange_matrix_expr")
 
-toString.matrix_3sum <- function(x, ...) {
-  paste0("(", toString(x$A), " 3+3 ", toString(x$B), " 3+3 ", toString(x$C), ")")
+rearrange_matrix_expr.matrix_data <- function(expr) {
+  expr
 }
-
+rearrange_matrix_expr.matrix_mult <- function(expr) {
+  matrix_mult(rearrange_matrix_expr(expr$left),
+              rearrange_matrix_expr(expr$right))
+}
 rearrange_matrix_expr.matrix_sum <- function(expr) {
-  if (inherits(expr$left, "matrix_sum")) {
-    new_expr <- matrix_3sum(expr$left$left, expr$left$right, expr$right)
-    rearrange_matrix_expr(new_expr)
-  } else if (inherits(expr$right, "matrix_sum")) {
-    new_expr <- matrix_3sum(expr$left, expr$right$left, expr$right$right)
-    rearrange_matrix_expr(new_expr)
-  } else {
-    matrix_sum(rearrange_matrix_expr(expr$left),
-               rearrange_matrix_expr(expr$right))  
-  }
-}
-
-rearrange_matrix_expr.matrix_3sum <- function(expr) {
-  matrix_3sum(rearrange_matrix_expr(expr$A),
-              rearrange_matrix_expr(expr$B),
-              rearrange_matrix_expr(expr$C))
+  matrix_sum(rearrange_matrix_expr(expr$left),
+             rearrange_matrix_expr(expr$right))
 }
 ```
+
+These functions simply traverse a matrix expression and return the same expression structure. We can modify the functions based on patterns of expressions, however, to start rearranging.
+
+We can make some reasonable guesses at how many operations are needed to evaluate an expression from these two rules: 1) multiplying an $n\\times k$ matrix to a $k\\times m$ matrix involves $n\\times k \\times m$ operations, and 2) adding two $n\\times m$ matrices together involve $n\\times m$ operations. If we can do any rewriting of an expression that reduces the number of operations we have to do, then we are improving the expression.
+
+There are some obvious patterns we could try to match and rewrite. For instance, we should always prefer $(A+B)C$ over $AC+BC$. However, we can probably expect that the programmer writing an expression already knows this, so there is likely little to gain from such obvious rewrites. Where we might get some performance is when expressions consist of several matrices multiplied together. There, the order of multiplications matter for the number of operations we have to perform, and the optimal order depends on the dimensions of the matrices, so we cannot simply look at the an arithmetic expression and see the obvious way of setting parentheses to get the best performance.
 
 #### Optimising multiplication
 
+Before we start rewriting multiplication expressions, though, we should figure out how to find the optimal order of multiplication. Assume we have matrices $A_1\\times A_2\\times\\ldots\\times A_n$. We need to set parentheses somewhere, say $(A_1\\times A_2\\times\\ldots A_i)\\times(A_{i+1}\\ldots\\times A_n)$ to select the *last* matrix multiplication. If we first multiply together, in some order, the first $i$ and the last $n-i$ matrices, the last multiplication we have to do is the product of those two. If the dimensions of $(A_1\\times\\ldots A_i)$ is $n\\times k$ and the dimensions of $(A_{i+1}\\ldots\\times A_n)$ is $k\\times m$, then this approach will involve $n\\times k \\times m$ operations plus how long it takes to produce the two matrices. Assume the best possible way of multiplying together the first $i$ matrices involve $N_{1,i}$ operations, and the best possible way of multiplying the last $n-i$ matrices together involve $N_{i+1,n}$ operations, then the best possible solution that involves setting the parentheses where we just did involves $N_{1,i}+N_{i+1,n}+n\\times k\\times m$ operations. Obviously, to get the best performance, we must pick the best $i$ for setting the parentheses at the top level, so we must minimise this expression for $i$. Recursively, we can then solve for the sequences 1 to $i$ and $i+1$ to $n$, to get the best performance there.
+
+Put in another way, the minimum number of operations we need to multiply together matrices $A_i,A_{i+1},\\ldots,A_j$ can be computed recursively as $N_{i,j} = 0$ when $i=j$ and
+$$
+N_{i,j} = \\min_k \\left\\{ N_{i,k} + N_{k+1,j} + \\mathrm{nrow}(A_i)\\times\\mathrm{ncol}(A_k)\\times\\mathrm{ncol}(A_j) \\right\\}
+$$
+otherwise. Actually computing this recursively will involve recomputing the same values many times, but using dynamic programming we can compute the $N_{i,j}$ table efficiently, and from that table we can backtrack and find the optimal way of setting parentheses as well.
+
+In the implementation below, we assume that we have such a list of matrices as input. We then collect their dimensions in a table, `dims`, for easy access. Then, we simply create a table, to represent the $N_{i,j}$ values and fill it using the equation above. Once the table is filled, we call a backtracking function to gives us the optimal way of multiplying together the matrices from 1 to `n`, given the dimensions, table and matrices.
+
+```{r}
+arrange_optimal_matrix_mult <- function(matrices) {
+  n <- length(matrices)
+  dims <- matrix(0, nrow = n, ncol = 2)
+  for (i in seq_along(matrices)) {
+    dims[i,] <- dim(matrices[[i]])
+  }
+  
+  N <- matrix(0, nrow = n, ncol = n)
+  for (len in 2:n) {
+    for (i in 1:(n - len + 1)) {
+      j <- i + len - 1
+      k <- i:(j - 1)
+      N[i,j] <- min(dims[i,1]*dims[k,2]*dims[j,2] + N[i,k] + N[k + 1,j])
+    }
+  }
+  
+  backtrack_matrix_mult(1, n, dims, N, matrices)  
+}
+```
+
+We use a table of matrix dimensions because it allows us to compute the minimum of the expression using a vector expression over `k`, something we couldn't do using the `A` list quite as easily, and we loop over the length of intervals rather than just `i` and `j` because we need to compute the `N[i,j]` values in order of increasing lengths for the dynamic programming algorithm to work---otherwise we are not guaranteed that the `N` values we use in the expression are filled out yet---but otherwise we just implement the computation sketched above.
+
+The backtracking function is equally simple. We want to find the optimal way of multiplying together matrices `i` to `j` and we have the table that tells us what $N_{i,j}$ is. So we should find a split point where we can get that value from the recursion. That is where we should set the set of parentheses and then solve to the left and right recursively, until we get to the basis case of a single matrix, which of course is already its own result.
+
+```{r}
+backtrack_matrix_mult <- function(i, j, dims, N, matrices) {
+  if (i == j) {
+    matrices[[i]]
+  } else {
+    k <- i:(j - 1)
+    candidates <- dims[i,1]*dims[k,2]*dims[j,2] + N[i,k] + N[k + 1,j]
+    split <- k[which(N[i,j] == candidates)][1]
+    left <- backtrack_matrix_mult(i, split, dims, N, matrices)
+    right <- backtrack_matrix_mult(split + 1, j, dims, N, matrices)
+    matrix_mult(left, right)
+  }
+}
+```
+
+At each step in the backtracking function, we construct a multiplication object using `matrix_mult`, so we rearrange the original expression in this way.
+
+#### Expression rewriting
+
+With the dynamic programming algorithm in place, we know how to arrange multiplications in the optimal order. We need to have them in a list, however, to access them by index in constant time in the backtracking function, but what we have as input is an expression that gives us a tree of mixed multiplications, addition, and data objects. So the first step we must perform in the rearranging is to collect the components of the multiplication in a list.
+
+It is simple enough to visit all the relevant values in an expression. We simply recurse on all `matrix_mult` objects but not data or `matrix_sum` objects, since it is these that we want to collect. It is inefficient to traverse the tree and grow an actual `list` object one element at a time; every time you extend the length of a `list` object by one element, you need to copy all the old elements. Instead, we can implement a linked list---that we can prepend elements to in constant time---and translate that into a `list` object later.
+
+To see this in action, we can consider a simpler tree first:
+
+```{r}
+leaf <- function(x) structure(x, class = c("leaf", "tree"))
+inner <- function(left, right) 
+  structure(list(left = left, right = right),
+            class = c("inner", "tree"))
+```
+
+Let us say we have such a tree
+
+```{r}
+tree <- inner(leaf(1), inner(inner(leaf(2), leaf(3)), leaf(4)))
+```
+
+(and that we do not *a priori* know that it has four leaves), and we want to construct a list containing the values in the leaves.
+
+One way to implement linked lists is as a `list` object containing two values, the head of the list---an actual value---and the tail of the list---another list, or potentially `NULL` representing the empty list.
+
+Since `head` and `tail` are builtin useful functions in R, I will call these two elements `car` and `cdr` instead. These are the names they have in the Lisp programming language and many other functional programming languages. We can construct a list from a `car` and `cdr` element like this:
+
+```{r}
+cons <- function(car, cdr) list(car = car, cdr = cdr)
+```
+
+To traverse a tree, we use recursion, but we don't want to explicitly test the class of subtrees we see. This is what we would usually do: have a test for the base case of having a leaf and another case for when we have an inner node, and in this simple tree this would be sensible enough. However, once we start working with expressions where we can have many different node types, and it might not be obvious what should be considered a base case or a recursive case for any particular traversal, it is better to use generic functions.
+
+```{r}
+collect_leaves_rec <- function(tree, lst) 
+  UseMethod("collect_leaves_rec")
+
+collect_leaves_rec.leaf <- function(tree, lst) {
+  cons(tree, lst)
+}
+collect_leaves_rec.inner <- function(tree, lst) {
+  collect_leaves_rec(tree$left, collect_leaves_rec(tree$right, lst))
+}
+```
+
+Using a generic function like this is certainly overkill for this simple example, but it illustrate the idea that will be useful for more complex trees. Each node type is responsible for handling itself and potentially recurse further if this is needed. Here, the leaf handler prepends the tree to the list that is passed down the recursion. The tree is just the leaf, so this is the value we want to collect. The result is an updated list that we return from the recursion. For inner nodes, we first call recursively towards the right, passing along the `lst` object. This will prepend the elements in the right subtree to create a new list that we then pass along to a recursion on the left subtree.
+
+The result of this traversal is a linked list containing all the leaves. To create a `list` object out of this, we need to run through the list and compute its length, allocated a `list` of that length, and then run through the linked list again to insert the elements in the `list`. This is one of the few tasks in R that is easier done with a loop than a functional solution, so that is what we will use:
+
+```{r}
+lst_length <- function(lst) {
+  len <- 0
+  while (!is.null(lst)) {
+    lst <- lst$cdr
+    len <- len + 1
+  }
+  len
+}
+lst_to_list <- function(lst) {
+  v <- vector(mode = "list", length = lst_length(lst))
+  index <- 1
+  while (!is.null(lst)) {
+    v[[index]] <- lst$car
+    lst <- lst$cdr
+    index <- index + 1
+  }
+  v
+}
+```
+
+To improve readability of the example, I will just add a function that gives us a `vector` instead of a `list`.
+
+```{r}
+lst_to_vec <- function(lst) unlist(lst_to_list(lst))
+```
+
+Now we can use the combination of the traversal and transformation from linked list to implement the function we want:
+
+```{r}
+collect_leaves <- function(tree) {
+  lst_to_vec(collect_leaves_rec(tree, NULL))
+}
+collect_leaves(tree)
+```
+
+We can use exactly the same approach to implement a better version of the `rearrange_matrix_expr.matrix_mult` function from above---one that rearrange the multiplication instead of just returning the original expression. We need it to collect the components of the multiplication---those would be data and sum objects---and then rearrange these using the dynamic programming algorithm.
+
+```{r}
+rearrange_matrix_expr.matrix_mult <- function(expr) {
+  matrices <- collect_mult_components(expr)
+  arrange_optimal_matrix_mult(matrices)
+}
+```
+
+The `collect_mult_components` function can be implemented using a traversal using a generic function like this:
+
+```{r}
+collect_mult_components_rec <- function(expr, lst)
+  UseMethod("collect_mult_components_rec")
+collect_mult_components_rec.default <- function(expr, lst) 
+  cons(rearrange_matrix_expr(expr), lst)
+
+collect_mult_components_rec.matrix_mult <- function(expr, lst)
+    collect_mult_components_rec(expr$left,
+              collect_mult_components_rec(expr$right, lst))
+
+collect_mult_components <- function(expr)
+    lst_to_list(collect_mult_components_rec(expr, NULL))
+```
+
+We use the default implementation to just prepend expressions that are not multiplications to the list we are building, while for the multiplication objects we call recursively. Once we have collected all the components we need in a linked list we translate it into a `list` object that lets us look up elements by index, as we need in the dynamic programming algorithm.
+
+To see the rearranging in action, we can create the expression we used in the previous chapter. We have four matrices that we multiply together without setting any parentheses.
+
+```{r}
+A <- matrix(1, nrow = 400, ncol = 300)
+B <- matrix(1, nrow = 300, ncol = 30)
+C <- matrix(1, nrow = 30, ncol = 500)
+D <- matrix(1, nrow = 500, ncol = 400)
+
+expr <- m(A) * m(B) * m(C) * m(D)
+```
+
+This implicitly sets parentheses such that the expression will be evaluated by multiplying from left to right:
+
+```{r}
+expr
+```
+
+This, however, is not the optimal order. Instead, it is better to first multiply `A` with `B` and `C` with `D` and then multiplying the results:
+
+```{r}
+rearrange_matrix_expr(expr)
+```
 
 ### Expression evaluation
+
+
+
+```{r}
+v <- function(expr) eval_matrix_expr(rearrange_matrix_expr(expr))
+```
 

@@ -19,9 +19,7 @@ lst_to_list <- function(lst) {
   }
   v
 }
-
-lst_to_vec <- function(lst) 
-  unlist(lst_to_list(lst))
+lst_to_vec <- function(lst) unlist(lst_to_list(lst))
 
 leaf <- function(x) structure(x, class = c("leaf", "tree"))
 inner <- function(left, right) 
@@ -45,4 +43,3 @@ collect_leaves <- function(tree) {
 
 tree <- inner(leaf(1), inner(inner(leaf(2), leaf(3)), leaf(4)))
 collect_leaves(tree)
-
