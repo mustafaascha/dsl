@@ -182,7 +182,6 @@ A <- matrix(1, nrow = 400, ncol = 300)
 B <- matrix(1, nrow = 300, ncol = 30)
 C <- matrix(1, nrow = 30, ncol = 500)
 D <- matrix(1, nrow = 500, ncol = 400)
-X <- matrix(1, nrow = 400, ncol = 400)
 
 expr <- m(A) * m(B) * m(C) * m(D) * (m(X) + m(A) * m(B) * m(C) * m(D) + m(X))
 expr
@@ -193,6 +192,11 @@ optimise_eval <- function(expr) {
   expr <- substitute(expr)
   v(build_matrix_expr(expr, parent.frame()))
 }
+
+all(A %*% B %*% C %*% D == optimise_eval(A %*% B %*% C %*% D))
+microbenchmark(A %*% B %*% C %*% D,
+               optimise_eval(A %*% B %*% C %*% D))
+
 #microbenchmark(A %*% B %*% C %*% D %*% (X + A %*% B %*% C %*% D + X),
 #               optimise_eval(A %*% B %*% C %*% D %*% (X + A %*% B %*% C %*% D + X)))
 

@@ -429,9 +429,52 @@ rearrange_matrix_expr(expr)
 
 ### Expression evaluation
 
+We want to do more than manipulate matrix expressions; we want to evaluate them. This is something we can do very easily in a recursive way, using a generic function to handle the different cases once again:
 
+```{r}
+eval_matrix_expr <- function(expr) 
+  UseMethod("eval_matrix_expr")
+eval_matrix_expr.matrix_data <- function(expr) 
+  expr$data
+eval_matrix_expr.matrix_mult <- function(expr)
+  eval_matrix_expr(expr$left) %*% eval_matrix_expr(expr$right)
+eval_matrix_expr.matrix_sum <- function(expr)
+  eval_matrix_expr(expr$left) + eval_matrix_expr(expr$right)
+```
+
+The basic case, the `matrix_data` case, gives us an R object that should be a matrix. In the recursive calls, we use matrix multiplication `%*%` and addition `+` on the results of recursive calls, so what we apply these operators on are R objects---which means that the `+` operator is *not* the operator we wrote to create `matrix_sum` objects.
+
+Since we are explicitly delaying the evaluation of matrix expressions so we can rearrange them for optimal evaluation, we need a way to trigger the actual evaluation, and this would be the natural place to rearrange an expression as well, so we write a function for that:
 
 ```{r}
 v <- function(expr) eval_matrix_expr(rearrange_matrix_expr(expr))
 ```
+
+Of course, we can also combine the parsing---the meta-programming approach to this we looked at earlier---and an evaluation of the expression to make a function for faster evaluation of an expression:
+
+```{r}
+fast <- function(expr) {
+  expr <- substitute(expr)
+  v(build_matrix_expr(expr, parent.frame()))
+}
+```
+
+As long as we stick to `%*%` and `+` operators, this function will evaluate to the same value as a plain matrix expression
+
+```{r}
+all(A %*% B %*% C %*% D == fast(A %*% B %*% C %*% D))
+```
+
+but because we have changed the definition of `*` it is not generally useable. You can modify the parser, though, and you have an optimiser for speeding up your matrix multiplications:
+
+```{r, cache=TRUE}
+res <- microbenchmark(A %*% B %*% C %*% D,
+                      fast(A %*% B %*% C %*% D))
+options(microbenchmark.unit="relative")
+print(res, signif = 3, order = "mean")
+```
+
+The recursion in `build_matrix_expr` stops the first time it doesn't recognise a call object and create a data object. A better implementation would try to go deeper and optimise as much of the expression as it could, but this is more an exercise in meta-programming than in domain specific languages.
+
+As a DSL, matrix algebra is very simple. So simple that you might not consider it a language at all, perhaps, but it is; algebraic notation is a DSL that is so useful that we get so familiar with it that we forget how amazing it is compared to the alternative---prose. Still, what we have implemented in this chapter *is* very simple and while we might use the meta-programming techniques for code optimisation, we probably wouldn't write a DSL for something as simple as this. Still, the example illustrates the phases in reading, analysing, and evaluating expressions we see in most DSLs. The three phases can be simpler or more complex in other DSLs---the "analysis" step might be entirely missing---and they might be merged so parsing and evaluation is done as a single step, but conceptually these are the steps we usually see.
 
