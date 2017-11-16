@@ -103,9 +103,7 @@ We need a way of bootstrapping us from R's matrices to the matrices in our expre
 
 #### Meta-programming parsing
 
-**FIXME: WRITE CODE FOR TRANSLATING A SYMBOLIC EXPRESSION INTO A MATRIX EXPRESSION**
-
-[Chapter @sec:parsing_and_manipulating_expressions]
+Using an explicit function such as `m` to bootstrap us into the matrix expression language is the simplest way to use R's own parser for our benefits, but it is not the only way. In R, we can manipulate expressions as if they were data, a feature known as *meta-programming*, and something we return to in [Chapter @sec:parsing_and_manipulating_expressions]. For now, it suffices to know that an expression can be recursively explored. We can use the predicate `is.name` to check if the expression refers to a variable, and we can use the predicate `is.call` to check if it is a function call---and all operators are function calls. So, given an expression that doesn't use the `m` function, and thus doesn't enter our DSL, we can transform it into one that does like this:
 
 ```{r}
 build_matrix_expr <- function(expr) {
@@ -127,7 +125,36 @@ build_matrix_expr <- function(expr) {
 }
 ```
 
-[Chapter @sec:env_and_expr].
+In this implementation, we consider both `*` and `%*%` matrix multiplication, just so we would consider an R expression that actually uses matrix multiplication as such.
+
+For this function to work, it needs a so-called "quoted" expression to work with. If we write a raw expression in R, then R will try to evaluate it before we can manipulate it. We will get an error before we even get to rewriting the expression.
+
+```{r}
+build_matrix_expr(A * B)
+```
+
+To avoid this, we need to quote the expression:
+
+```{r}
+build_matrix_expr(quote(A * B))
+```
+
+We can avoid having to explicitly quote expressions every time we call the function by wrapping it in another function that does it for us. If we call the function `substitute` on a function parameter, we get the expression it contains, so we could write a function like this:
+
+```{r}
+parse_matrix_expr <- function(expr) {
+  expr <- substitute(expr)
+  build_matrix_expr(expr)
+}
+```
+
+Now, we do not need to quote expressions to do the rewriting.
+
+```{r}
+parse_matrix_expr(A * B)
+```
+
+This isn't a perfect solution, and there are some pitfalls, among which is that you cannot use this function from other functions directly. The `substitute` function can be difficult to work with. A further problem is that we are creating a new expression, but an R expression and not the data structure we want in our matrix expression language. The R expression, you can think of as a literate piece of code; it is not yet evaluated to become the result we want. For that, we need the `eval` function and we need to evaluate the expression in the right context. Working with expressions, and especially evaluating expressions in different environments, are among the more advanced aspects of R programming, so if it looks very complicated right now do not despair. We cover it in detail in [Chapter @sec:env_and_expr]. For now, we will just use this function:
 
 ```{r}
 parse_matrix_expr <- function(expr) {
@@ -137,9 +164,15 @@ parse_matrix_expr <- function(expr) {
 }
 ```
 
+It gets the (quoted) expression, build the corresponding matrix expression, and then evaluate that expression in the "parent frame", which is the environment where we call the function. With this function, we can get a data structure in our matrix language from an otherwise ordinary R expression:
+
 ```{r}
 parse_matrix_expr(A * B)
 ```
+
+The approach we take here, involves translating one R expression into another, in order to use our `m` function to move us from R to matrix expressions. This involves parsing the expression twice, once when we transform it, and again when we ask R to evaluate the result. The approach is also less expressive than using the `m` function directly. We can call `m` with any expression that generates a matrix, but in the expression transformation we only allow identifiers.
+
+As an alternative, we can build the matrix expression directly using our constructor functions. We will use `matrix_mult` and `matrix_sum` when we have a call that is `*`, `%*%`, or `+`, and otherwise we will call `m`. This way, any expression we do not recognise as multiplication or addition will be interpreted as a value we should consider a matrix. This approach, however, adds one complication. When we call function `m`, we need to call it with a value, but what we have when traverse the expression is *quoted* expressions. We need to evaluate such expressions, and we need to do so in the right environment. We will need to pass an environment along with the traversal for this to work.
 
 ```{r}
 build_matrix_expr <- function(expr, env) {
@@ -155,7 +188,13 @@ build_matrix_expr <- function(expr, env) {
   attr(data_matrix, "def_expr") <- expr
   data_matrix
 }
+```
 
+Most of this function should be self-explanatory, except for where we explicitly set the `def_expr` attribute of a data matrix. This is the attribute be use for pretty printing, and when we call the `m` function it is set to the literate expression we called `m` with. This would be `eval(expr, env)` for all matrices we create with this function. To avoid that, we explicitly set it to the (quoted) expression we use in the evaluation.
+
+Once again, we can wrap the function in another that gets us the quoted expression and provide the environment we should evaluate expressions in.
+
+```{r}
 parse_matrix_expr <- function(expr) {
   expr <- substitute(expr)
   build_matrix_expr(expr, parent.frame())
@@ -163,6 +202,8 @@ parse_matrix_expr <- function(expr) {
 
 parse_matrix_expr(A * B)
 ```
+
+There is much more to manipulating expressions, and especially to how they are evaluated, but we return to that in later chapters.
 
 ### Expression manipulation
 
