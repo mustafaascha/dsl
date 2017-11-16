@@ -1,18 +1,21 @@
 ## Helper functionality -- lists ################################
 cons <- function(car, cdr) list(car = car, cdr = cdr)
-lst_length <- function(lst, size = 1) {
-  if (is.null(lst)) size - 1
-  else lst_length(lst$cdr, size + 1)
+lst_length <- function(lst) {
+  len <- 0
+  while (!is.null(lst)) {
+    lst <- lst$cdr
+    len <- len + 1
+  }
+  len
 }
 lst_to_list <- function(lst) {
   v <- vector(mode = "list", length = lst_length(lst))
-  insert <- function(lst, size = 1) {
-    if (!is.null(lst)) {
-      v[[size]] <<- lst$car
-      insert(lst$cdr, size + 1)
-    }
+  index <- 1
+  while (!is.null(lst)) {
+    v[[index]] <- lst$car
+    lst <- lst$cdr
+    index <- index + 1
   }
-  insert(lst)
   v
 }
 
@@ -47,6 +50,24 @@ matrix_sum <- function(A, B) {
   matrix_sum(A, B)
 }
 
+build_matrix_expr <- function(expr, env) {
+  if (is.call(expr)) {
+    if (expr[[1]] == as.name("*") || expr[[1]] == as.name("%*%"))
+      return(matrix_mult(build_matrix_expr(expr[[2]], env), 
+                         build_matrix_expr(expr[[3]], env)))
+    if (expr[[1]] == as.name("+"))
+      return(matrix_sum(build_matrix_expr(expr[[2]], env), 
+                        build_matrix_expr(expr[[3]], env)))
+  }
+  data_matrix <- m(eval(expr, env))
+  attr(data_matrix, "def_expr") <- expr
+  data_matrix
+}
+
+parse_matrix_expr <- function(expr) {
+  expr <- substitute(expr)
+  build_matrix_expr(expr, parent.frame())
+}
 
 
 ## Helper functions ##############################################
@@ -212,6 +233,15 @@ X <- matrix(1, nrow = 400, ncol = 400)
 expr <- m(A) * m(B) * m(C) * m(D) * (m(X) + m(A) * m(B) * m(C) * m(D) + m(X))
 expr
 rearrange_matrix_expr(expr)
+
+
+optimise_eval <- function(expr) {
+  expr <- substitute(expr)
+  v(build_matrix_expr(expr, parent.frame()))
+}
+microbenchmark(A %*% B %*% C %*% D %*% (X + A %*% B %*% C %*% D + X),
+               optimise_eval(A %*% B %*% C %*% D %*% (X + A %*% B %*% C %*% D + X)))
+
 
 #microbenchmark(v(expr), v2(expr), v3(expr))
 

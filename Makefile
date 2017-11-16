@@ -8,6 +8,7 @@ CHAPTERS := 000_header.md \
 			\
 			part_parsing.md \
 			Functions_expressions_operators.md \
+			Parsing_and_manipulating_expressions.md \
 			\
 			part_evaluating.md \
 			Environments_and_expressions.md \

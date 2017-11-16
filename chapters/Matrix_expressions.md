@@ -105,6 +105,65 @@ We need a way of bootstrapping us from R's matrices to the matrices in our expre
 
 **FIXME: WRITE CODE FOR TRANSLATING A SYMBOLIC EXPRESSION INTO A MATRIX EXPRESSION**
 
+[Chapter @sec:parsing_and_manipulating_expressions]
+
+```{r}
+build_matrix_expr <- function(expr) {
+  if (is.name(expr)) 
+    return(substitute(m(name), list(name = expr)))
+  
+  if (is.call(expr)) {
+    if (expr[[1]] == as.name("*") || expr[[1]] == as.name("%*%"))
+      return(call('*', 
+                  build_matrix_expr(expr[[2]]), 
+                  build_matrix_expr(expr[[3]])))
+    if (expr[[1]] == as.name("+"))
+      return(call('+', 
+                  build_matrix_expr(expr[[2]]), 
+                  build_matrix_expr(expr[[3]])))
+  }
+  
+  stop(paste("Parse error for", expr))
+}
+```
+
+[Chapter @sec:env_and_expr].
+
+```{r}
+parse_matrix_expr <- function(expr) {
+  expr <- substitute(expr)
+  modified_expr <- build_matrix_expr(expr)
+  eval(modified_expr, parent.frame())
+}
+```
+
+```{r}
+parse_matrix_expr(A * B)
+```
+
+```{r}
+build_matrix_expr <- function(expr, env) {
+  if (is.call(expr)) {
+    if (expr[[1]] == as.name("*") || expr[[1]] == as.name("%*%"))
+      return(matrix_mult(build_matrix_expr(expr[[2]], env), 
+                         build_matrix_expr(expr[[3]], env)))
+    if (expr[[1]] == as.name("+"))
+      return(matrix_sum(build_matrix_expr(expr[[2]], env), 
+                        build_matrix_expr(expr[[3]], env)))
+  }
+  data_matrix <- m(eval(expr, env))
+  attr(data_matrix, "def_expr") <- expr
+  data_matrix
+}
+
+parse_matrix_expr <- function(expr) {
+  expr <- substitute(expr)
+  build_matrix_expr(expr, parent.frame())
+}
+
+parse_matrix_expr(A * B)
+```
+
 ### Expression manipulation
 
 #### Optimising addition
