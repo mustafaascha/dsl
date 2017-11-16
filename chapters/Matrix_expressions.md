@@ -454,8 +454,7 @@ Of course, we can also combine the parsing---the meta-programming approach to th
 
 ```{r}
 fast <- function(expr) {
-  expr <- substitute(expr)
-  v(build_matrix_expr(expr, parent.frame()))
+  v(build_matrix_expr(substitute(expr), parent.frame()))
 }
 ```
 
