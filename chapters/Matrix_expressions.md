@@ -432,10 +432,8 @@ rearrange_matrix_expr(expr)
 We want to do more than manipulate matrix expressions; we want to evaluate them. This is something we can do very easily in a recursive way, using a generic function to handle the different cases once again:
 
 ```{r}
-eval_matrix_expr <- function(expr) 
-  UseMethod("eval_matrix_expr")
-eval_matrix_expr.matrix_data <- function(expr) 
-  expr$data
+eval_matrix_expr <- function(expr) UseMethod("eval_matrix_expr")
+eval_matrix_expr.matrix_data <- function(expr) expr$data
 eval_matrix_expr.matrix_mult <- function(expr)
   eval_matrix_expr(expr$left) %*% eval_matrix_expr(expr$right)
 eval_matrix_expr.matrix_sum <- function(expr)
