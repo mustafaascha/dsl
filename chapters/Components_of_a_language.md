@@ -60,7 +60,7 @@ For embedded DSLs, the semantics of a program is simply what we do to evaluate a
 
 ### Specifying a grammar
 
-**FIXME**
+Since we are using R to parse expressions, we do not have much flexibility in what can be considered tokens and we have some limitations in the kinds of grammar we can implement, but for the grammars we also have some flexibility. To specify grammars in this book, I will take a traditional approach and describe them in terms of “rules” for generating sentences valid within a grammar. Consider the following grammar:
 
 ```
 EXPRESSION ::= NUMBER 
@@ -69,57 +69,45 @@ EXPRESSION ::= NUMBER
             |  '(' EXPRESSION ')'
 ```
 
+This grammar describes rules for generating expressions consisting of addition and multiplication of numbers, with parentheses to group expressions.
+
+You should read this as “an expression is either a number, the sum of two expressions, the product of two expressions, or an expression in parentheses”.  The definition is recursive—an expression is defined in terms of other expressions—but we have a basis case, a number, that lets us create a basic expression, and from such an expressions we can create more complex expressions.
+
+The syntax I use here for specifying grammars is itself a grammar—a meta-grammar if you will. The way you should interpret it is thus: the grammatical object we are defining is to the left of the `::=` object. After that, we have a sequence of one or more ways to construct such an object, separated by `|`. These rules for constructing the object we define will be a sequence of other grammatical objects. These can either be objects we define by other rules—I will write those in all capitals and refer to them as meta-variables—or concrete lexical tokens—I write those in single quotes, as the `'+'` in the second rule for creating a sum. This notation is analogue to the graphical notation I used in [@fig:example-AST] where meta-variables are shown in italics and concrete tokens are put in grey boxes.
+
+Meta-grammars like this are used to formally define languages, and there are many tools that will let you automatically create parsers from a grammar specification in a meta-grammar. I will use this home-made meta-grammar much less formally. I just use it as a concise way of describing the grammar of DSLs we create, and you can think of it as simply pseudo-code for a grammar.
+
+To create an expression we must follow the meta-grammar rules, so we must use one of the four alternatives provided: Either reduce an expression to a number, a sum or product, or create another in parentheses. For example, we can apply the rules in turn and get:
+
+```
+EXPRESSION > EXPRESSION '*' EXPRESSION                        (3)
+           > '(' EXPRESSION ')' '*' EXPRESSION                (4)
+           > '(' EXPRESSION '+' EXPRESSION ')' '*' EXPRESSION (2)
+           > '(' number[2] '+' number[2] ')' '*' number[3]  (1x3)
+```
+
+Which lets us construct the expression `(2 + 2) * 3` from the rules.
+
+If there are several different ways to go from meta-variables to the same sequence of terminal rules (so there are several rules that lead to the exact sequence of lexical tokens), then we have a problem with interpreting the language. The exact same sequence of tokens could be interpreted as specifying two different grammatical objects. For the expression grammar, we have ambiguities when we have expressions such as `2 + 2 * 3`. We can parse this in two different ways, depending on which rules we apply to get from the meta-variable `EXPRESSION` to the concrete expression. We can apply multiplication first and get what amounts to `(2 + 2) * 3`, or we can apply the addition rule first and get `2 + (2 * 3)`. We know from traditional mathematical notation that we should get the second expression—multiplication has higher precedence than addition so the `*` symbol binds 2 and 3 together tighter than `+` does 2 and 2, but the grammar does not guarantee this. The grammar is ambiguous.
+
+It is possible to fix this by changing the grammar to this:
+
 ```
 EXPRESSION ::= TERM '+' EXPRESSION | TERM
 TERM ::= TERM '*' FACTOR | FACTOR
 FACTOR ::= '(' EXPR ')' | NUMBER
 ```
 
-Now we get to defining the grammar for our drawing language. First, the syntax for creating a drawing:
+This is a more complex grammar that lets you create the same expressions, but through three meta-variables that are recursively defined in terms of each other. It is structure such that products will naturally group closer than sums—the only way to construct the expression `2 + 2 * 3` is **FIXME: FIGURE**. The order in which we apply the rules can vary, but the tree will always be this form and group the product closer than the sum.
 
-```
-DRAWING ::= CANVAS
-          | DRAWING '+' GRAPHICAL_OBJECT
-```
+An unambiguous grammar is preferable over an ambiguous for obvious reasons, but creating one can complicate the specification of the grammar, as we see for expressions. This can be alleviated by making smarter parser that take such things as operator precedence into account or keep track of context when parsing a string.
 
-You should read this as “a drawing is either a canvas or a drawing we have added a graphical object to”. The definition is recursive—a drawing is defined in terms of another drawing—but we have a basis case, a canvas, that lets us create a basic drawing, and from such a drawing we can create more complex drawings by adding graphical objects.
+When writing embedded DSLs, we are stuck with R's parser, and we must obey its rules. If you are writing your own parser entirely, you can pass context along as you parse a sequence of tokens, but if you want to exploit R’s parser and create an embedded DSL, you are better off ensuring that all grammatically valid sequences of tokens unambiguously refer to one grammatical meta-variable. Precedence ambiguities will be taken care of by R as will associativity—the rules that means that `1 + 2 + 3 + 4` is interpreted as `(((1 + 2) + 3) + 4)`. Exploiting R's parsing rules, we can construct languages where each expression uniquely matches a parser meta-variable if we are a little careful with designing the language.
 
-The syntax I use here for specifying grammars is itself a grammar—a meta-grammar if you will. The way you should interpret it is thus: the grammatical object we are defining is to the left of the `::=` object. After that, we have a sequence of one or more ways to construct such an object, separated by `|`. These rules for constructing the object we define will be a sequence of other grammatical objects. These can either be objects we define by other rules—I will write those in all capitals and refer to them as meta-variables—or concrete lexical tokens—I write those in single quotes, as the `'+'` in the second rule for creating a `DRAWING`. This notation is analogue to the graphical notation I used in [@fig:example-AST] where meta-variables are shown in italics and concrete tokens are put in grey boxes.
-
-Meta-grammars like this are used to formally define languages, and there are many tools that will let you automatically create parsers from a grammar specification in a meta-grammar. I will use this home-made meta-grammar much less formally. I just use it as a concise way of describing the grammar of a DSL we create, and you can think of it as simply pseudo-code for a grammar.
-
-To create a drawing we must follow the meta-grammar rules, so we must use one of the two alternatives provided: either create a canvas or create a drawing from another drawing. The second option is, of course, only possible if we can create a drawing to begin with, so we must always start with a canvas. We need another rule for creating a `CANVAS`, then.
-
-```
-CANVAS ::= 'canvas(...)'
-```
-
-This rule tells us that to create a `CANVAS` we need to use the verbatim `canvas(...)`, except that I will define `...` to generally mean whatever arguments an R function takes. This is partly laziness—I don’t want to specify the grammar for the various way you can call an R function for every time I define a grammar, and partly to allow functions to be extended without having to worry about updating a grammar. You should read this rule as such: to create a `CANVAS`, you should just call the R function `canvas`. This is also an example of how we define a token of our DSL that is not directly a token in R. In R, a function call is a complex object consisting of several tokens, but in our DSL we consider a call to `canvas` a single token.
-
-The `CANVAS` rule doesn’t refer to any meta-variables on the right, so it gives us a way to construct a canvas directly. We will call such rules *terminal* rules. In actual expressions in the DSL we must always write the expressions created from terminal rules, but the grammatical objects we create depend on how we get to those terminal rules from the meta-variables. We can, using just the rules we have now, create a concrete drawing by following these rules:
-
-```
-DRAWING > CANVAS > 'canvas(...)'
-```
-
-You should read this as: “a DRAWING is a CANVAS is a call to the `canvas` function. If we define a `canvas` function, we therefore  have a way to make a basic drawing.
-
-If there are several different ways to go from meta-variables to the same sequence of terminal rules (so there are several rules that lead to the exact sequence of lexical tokens), then we have a problem with interpreting the language. The exact same sequence of tokens could be interpreted as specifying two different grammatical objects. This isn’t so unusual in natural languages— ”the hungry dog” can be both a subject and an object, for example—and can be resolved through context. “The hungry dog ate the sausage” (“the hungry dog” is a subject) versus “I saw the hungry dog” (“the hungry dog” is a direct object) versus “I gave the hungry dog a sausage” (“the hungry dog” is an indirect object). Ambiguous sequences of tokens can also be resolved into specific meta-grammar rules via context, but doing this complicates parsing: when parsing a sequence of tokens, we will need to know which context we are in.
-
-If you are writing your own parser entirely, you can pass context along as you parse a sequence of tokens, but if you want to exploit R’s parser and create an embedded DSL, you are better off ensuring that all grammatically valid sequences of tokens unambiguously refer to one grammatical meta-variable. The meta-grammar does not guarantee this, but we will be careful to construct our DSLs such that this is true.
-
-Getting back to the drawing DSL, we can make the following rule for constructing graphical objects:
-
-```
-GRAPHICAL_OBJECT ::= POINT 
-                   | LINE_SEGMENT 
-                   | GRAPHICAL_OBJECT TRANSFORMATION
-```
+**FIXME**
 
 
 
-
-**FIXME: example here**
 
 ### Designing semantics
 
