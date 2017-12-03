@@ -104,11 +104,16 @@ An unambiguous grammar is preferable over an ambiguous for obvious reasons, but 
 
 When writing embedded DSLs, we are stuck with R's parser, and we must obey its rules. If you are writing your own parser entirely, you can pass context along as you parse a sequence of tokens, but if you want to exploit R’s parser and create an embedded DSL, you are better off ensuring that all grammatically valid sequences of tokens unambiguously refer to one grammatical meta-variable. Precedence ambiguities will be taken care of by R as will associativity—the rules that means that `1 + 2 + 3 + 4` is interpreted as `(((1 + 2) + 3) + 4)`. Exploiting R's parsing rules, we can construct languages where each expression uniquely matches a parser meta-variable if we are a little careful with designing the language.
 
-**FIXME**
-
-
-
+**FIXME: state space / graph example**
 
 ### Designing semantics
+
+The reason we write domain specific languages is to achieve some effect—we want to associate meaning, or semantics, to expressions in the DSL and we want our DSL expressions to achieve some result, whether that is executing some computations or building some data structures. The purpose of the DSL is simply to provide a convenient interface to whatever 
+Semantics we want the language to have.
+
+If we always make our parsing code construct a parse tree, then the next step in processing the DSL involves manipulation of this tree to achieve a desired effect. There might be a number of steps involved in this—for example, we rewrote expressions in the matrix expression example in order to optimise computations—but at the end of the processing we will execute the commands the DSL expression describes.
+
+Executing the DSL is sometimes straightforward and can be done as a final traversal of the parse tree. This is what we did with the matrix expressions where the purpose of the DSL was to rewrite expressions rather than evaluating them—the latter being a simple matter of multiplying and adding matrices. In other cases, it makes sense to separate the semantic model and the DSL by having a framework for the actions we want the language to allow for. Having a framework for the semantics of the language lets us develop and test the semantic model separately from the language we use as an interface for it, and it even allows us to have different input languages for manipulating the same semantic model if different people prefer different flavors of DSL—not that I would recommend having many different languages to achieve the same goals.
+
 
 
