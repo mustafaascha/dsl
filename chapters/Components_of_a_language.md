@@ -98,9 +98,12 @@ TERM ::= TERM '*' FACTOR | FACTOR
 FACTOR ::= '(' EXPR ')' | NUMBER
 ```
 
-This is a more complex grammar that lets you create the same expressions, but through three meta-variables that are recursively defined in terms of each other. It is structure such that products will naturally group closer than sums—the only way to construct the expression `2 + 2 * 3` is **FIXME: FIGURE**. The order in which we apply the rules can vary, but the tree will always be this form and group the product closer than the sum.
+This is a more complex grammar that lets you create the same expressions, but through three meta-variables that are recursively defined in terms of each other. It is structure such that products will naturally group closer than sums—the only way to construct the expression `2 + 2 * 3` is the parse tree shown in [@fig:expression-AST]. The order in which we apply the rules can vary, but the tree will always be this form and group the product closer than the sum.
 
-An unambiguous grammar is preferable over an ambiguous for obvious reasons, but creating one can complicate the specification of the grammar, as we see for expressions. This can be alleviated by making smarter parser that take such things as operator precedence into account or keep track of context when parsing a string.
+![Parse tree for `2 + 2 * 3`.](figures/expression-AST){#fig:expression-AST}
+
+
+An unambiguous grammar is preferable over an ambiguous for obvious reasons, but creating one can complicate the specification of the grammar, as we see for expressions. This can be alleviated by making smarter parser that take such things as operator precedence into account or keep track of context when parsing a string. Regardless of whether we write smarter parsers or unambiguous grammars, we would never work long with expression trees as complex as that shown in [@fig:expression-AST]—this tree explicitly show all grammar meta-variables, but in practise we would simplify it after parsing it and before processing the expression.
 
 When writing embedded DSLs, we are stuck with R's parser, and we must obey its rules. If you are writing your own parser entirely, you can pass context along as you parse a sequence of tokens, but if you want to exploit R’s parser and create an embedded DSL, you are better off ensuring that all grammatically valid sequences of tokens unambiguously refer to one grammatical meta-variable. Precedence ambiguities will be taken care of by R as will associativity—the rules that means that `1 + 2 + 3 + 4` is interpreted as `(((1 + 2) + 3) + 4)`. Exploiting R's parsing rules, we can construct languages where each expression uniquely matches a parser meta-variable if we are a little careful with designing the language.
 
