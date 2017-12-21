@@ -209,7 +209,7 @@ There are pros and cons with using operator overloading. Having to explicitly ma
 
 Of course, we could also use meta-programming and explicitly traverse expressions to make sure that the `>` operator will be the edge-creating operator instead of string comparison, similar to how we rewrote matrix expressions in the previous chapter.
 
-Returning to the `magrittr` solution for a brief moment, I think it is worth mentioning that designing a language is not all about defining new syntax. The language we are defining here, for specifying graphs, is doing exactly the same as the pipe operator does, so in this particular case we do not *need* to specify a new grammar to get all the benefits we want to achieve. Using pipes we avoid the nested function calls that would make our code hard to read, and we can specify a DAG as a list of edges that we add to it. The pipe operator will be familiar to most programmers, and best of all, if we use it, we do not need to implement any parsing code. We are still creating a DSL, though, when we define the functions to manipulate a DAG! Providing functions that gives you a vocabulary to express domain ideas is also language design. The `dplyr` package is an example of this—it is used together with the pipe operator to string various operations together, so it does not provide much in terms of new syntax, but it provides a very strong language for specifying data manipulation.
+Returning to the `magrittr` solution for a brief moment, I think it is worth mentioning that designing a language is not all about defining new syntax. The language we are defining here, for specifying graphs, is doing exactly the same as the pipe operator does, so in this particular case we do not *need* to specify a new grammar to get all the benefits we want to achieve. Using pipes we avoid the nested function calls that would make our code hard to read, and we can specify a DAG as a list of edges that we add to it. The pipe operator will be familiar to most programmers, and best of all, if we use it, we do not need to implement any parsing code. We are still creating a DSL, though, when we define the functions to manipulate a DAG. Providing functions that gives you a vocabulary to express domain ideas is also language design. The `dplyr` package is an example of this—it is used together with the pipe operator to string various operations together, so it does not provide much in terms of new syntax, but it provides a very strong language for specifying data manipulation.
 
 Of the various solutions we have explored, my preferred one would be the pipe-based. It makes it easy to extend edge information to more than a from- and a to-node—which is hard with a binary operator—and we can implement it without any language code; we just have to make the DAG the first argument to all the manipulation functions we would add to the language. Of course, this solution is only possible because the language we considered was a simple string of operations. This, of course, is not always the case, so sometimes we do need to do a bit more work.
 
@@ -223,5 +223,135 @@ If we always make our parsing code construct a parse tree, then the next step in
 
 Executing the DSL is sometimes straightforward and can be done as a final traversal of the parse tree. This is what we did with the matrix expressions where the purpose of the DSL was to rewrite expressions rather than evaluating them—the latter being a simple matter of multiplying and adding matrices. In other cases, it makes sense to separate the semantic model and the DSL by having a framework for the actions we want the language to allow for. Having a framework for the semantics of the language lets us develop and test the semantic model separately from the language we use as an interface for it, and it even allows us to have different input languages for manipulating the same semantic model if different people prefer different flavours of DSL—not that I would recommend having many different languages to achieve the same goals.
 
+As a simple example, we can consider a language for specifying a finite state continuous time Markov chain (CTMC). I choose this example because we have already implemented several versions of a finite state system when we implemented the graph DSL—for a CTMC we just have to associate rates with all the edges. Continuous time Markov chains are used many places in mathematical modelling, and usually using them comes down to specifying an instantaneous rate matrix. This is a matrix that specifies the rate at which we move from one state to another. Such a matrix should have non-negative values on all off-diagonal entries, and on the diagonal we should have minus the sum of the other entries in the rows. In a framework where we use CTMCs we would likely implement the functionality to work on rate matrices, but for specifying the CTMCs, a domain specific language might be easier to use.
 
+Calling it the “semantics” of the language to translate a graph specifications into a matrix might be stretching the word, but if we consider the DSL a way of specifying models and the (imagined) framework that manipulates them as part of the language, then I think we can justify it. Using the language will consist of specifying the CTMC, translating it into the corresponding rate matrix, and then manipulate that as intended. The language part of it, of course, is the translation from specification into matrix.
 
+As for the graphs above, we need to specify the edges in the chain. These need to have a rate associated, so the easiest syntax will be the pipe version—with this version it is simpler to specify three values for an edge, the from- and to-state and the rate. I will keep these in three different linked lists, just because it makes it easier to construct the matrix this way.
+
+```{r, echo=FALSE}
+cons <- function(car, cdr) list(car = car, cdr = cdr)
+lst_length <- function(lst) {
+  len <- 0
+  while (!is.null(lst)) {
+    lst <- lst$cdr
+    len <- len + 1
+  }
+  len
+}
+lst_to_list <- function(lst) {
+  v <- vector(mode = "list", length = lst_length(lst))
+  index <- 1
+  while (!is.null(lst)) {
+    v[[index]] <- lst$car
+    lst <- lst$cdr
+    index <- index + 1
+  }
+  v
+}
+```
+
+```{r}
+ctmc <- function() 
+  structure(list(from = NULL, 
+                 rate = NULL, 
+                 to = NULL), 
+            class = "ctmc")
+            
+add_edge <- function(ctmc, from, rate, to) {
+  ctmc$from <- cons(from, ctmc$from)
+  ctmc$rate <- cons(rate, ctmc$rate)
+  ctmc$to <- cons(to, ctmc$to)
+  ctmc
+}
+```
+
+Translating the lists into a rate matrix is now simply a usual programming job. We collect the nodes from the from and to lists—we translate them into R lists first, since those are easier to work with once we are done collecting elements—and we then get the unique node names. These become the rows and columns of the rate matrix, and we iterate through all the edges to insert the rates. After that, we set the diagonal, and we are done.
+
+```{r}
+rate_matrix <- function(ctmc) {
+  from <- lst_to_list(ctmc$from)
+  to <- lst_to_list(ctmc$to)
+  rate <- lst_to_list(ctmc$rate)
+  nodes <- c(from, to) %>% unique %>% unlist
+  
+  n <- length(nodes)
+  Q <- matrix(0, nrow = n, ncol = n)
+  rownames(Q) <- colnames(Q) <- nodes
+  
+  for (i in seq_along(from)) {
+    Q[from[[i]], to[[i]]] <- rate[[i]]
+  }
+  
+  diag(Q) <- - rowSums(Q)
+  
+  Q
+}
+```
+
+The `lst_to_list` function is the one from the previous chapter that translates a linked list into an R list.
+
+Constructing a CTMC rate matrix using this small language is now as simple as this:
+
+```{r}
+Q <- ctmc() %>% 
+  add_edge("foo", 1, "bar") %>% 
+  add_edge("foo", 2, "baz") %>% 
+  add_edge("bar", 2, "baz") %>% 
+  rate_matrix
+Q
+```
+
+Once we have translated the CTMC into this matrix, we can consider the language design over, but integrating CTMC construction and the operations we can do on a CTMC once we have constructed it will be important for easy-of-use of the DSL and can be considered part of the language as well. In this particular case, the good news is that the actual language design is done for us. The pipe operator tells us how to combine our CTMCs with further processing—we just have to write functions that can be used in a pipe. For example, if we want to know the transition probabilities of the CTMC for a time period—i.e. we want to know the probability of going from any one state to any other over a given time—we can add a function for that. The probabilities can be computed using matrix exponentiation (if you are not familiar with CTMC theory, just trust me on this). To make such a function compatible with a pipeline, we simply have to make the most likely data to come from the left in a pipe the first argument of the function. So we could write this: 
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(expm, quietly = TRUE))
+transitions_over_time <- function(Q, t) expm(Q * t)
+```
+```{r, eval=FALSE}
+library(expm)
+transitions_over_time <- function(Q, t) expm(Q * t)
+```
+```{r}
+P <- Q %>% transitions_over_time(0.2)
+P
+```
+
+Of course, even with the language constructions in place—the pipe operator—there is still some language design to be done. It isn’t always obvious what the flow of data will be through a pipe, after all. For example, if we want to evolve vectors of state probability, 
+
+```{r}
+probs <- c(foo=0.1, bar=0.9, baz=0.0)
+```
+
+is it more natural to have the probability vectors flow through the pipeline
+
+```{r}
+evolve <- function(probs, Q, t) {
+  probs <- probs[rownames(Q)]
+  probs %*%transitions_over_time(Q, t)
+}
+probs %>% evolve(Q, 0.2)
+```
+
+or would it be more natural to always have the CTMC (or its rate matrix) flow through the pipeline?
+
+```{r}
+evolve <- function(Q, t, probs) {
+  probs <- probs[rownames(Q)]
+  probs %*%transitions_over_time(Q, t)
+}
+Q %>% evolve(0.2, probs)
+```
+
+The former might feel more natural if we think of the system evolving over time, but the latter would fit better with a pipeline where we construct the CTMC first, then translate it into a rate matrix, and finally evolve the system.
+
+```{r}
+ctmc() %>% 
+  add_edge("foo", 1, "bar") %>% 
+  add_edge("foo", 2, "baz") %>% 
+  add_edge("bar", 2, "baz") %>% 
+  rate_matrix %>%
+  evolve(0.2, probs)
+```
+
+Only use-cases and experimentation will tell us what the best language design is. And that is also what makes designing languages so interesting.
