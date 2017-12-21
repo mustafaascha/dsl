@@ -107,7 +107,112 @@ An unambiguous grammar is preferable over an ambiguous for obvious reasons, but 
 
 When writing embedded DSLs, we are stuck with R's parser, and we must obey its rules. If you are writing your own parser entirely, you can pass context along as you parse a sequence of tokens, but if you want to exploit R’s parser and create an embedded DSL, you are better off ensuring that all grammatically valid sequences of tokens unambiguously refer to one grammatical meta-variable. Precedence ambiguities will be taken care of by R as will associativity—the rules that means that `1 + 2 + 3 + 4` is interpreted as `(((1 + 2) + 3) + 4)`. Exploiting R's parsing rules, we can construct languages where each expression uniquely matches a parser meta-variable if we are a little careful with designing the language.
 
-**FIXME: state space / graph example**
+As an example grammar that isn’t just expressions we can imagine that we want a language for specifying graphs—graphs as in networks or state machines, not plots. We can define a grammar for *directed acyclic graphs* (DAGs) by saying that a DAG is either an empty graph or a graph followed by an edge.
+
+```
+DAG ::= 'dag()' | DAG '+' EDGE
+```
+
+We use a function, `dag()`, to create an empty DAG. Calling this function brings us into the graph specification DSL and gives us an object we can use to program the grammar operations in R. We will use the plus operator to add edges to a DAG. That is a somewhat arbitrary choice, but it makes it easy to implement the parser since we simply will have to overload the generic `+` function. For edges, we will keep it simple and just require that we have a “from” and a “to” node. We can define our own infix operator to create them:
+
+```
+EDGE ::= NODE '%=>%' NODE
+```
+
+We cannot define any infix operator we want—we would be out of luck, for example, if we wanted the operator to be `==>` since R’s parser would interpret that as two tokens, `==` and `>`. We can always define our own, however, if we name them something starting and ending with the percentage sign. We can also reuse the existing infix operators through overloading, as we will do with plus to add edges to a DAG, but for this graph grammar, we can run into some problems if we attempt this, as we will see below. For nodes, we will not expand them more now. They are atomic tokens—we can, for example, require them to be strings.^[We haven’t formally defined how we would specify non-literate tokens in the syntax we use for specifying grammars, and doing so will not make the example any clearer, so let us just state that informally.]
+
+We will dig more into writing parsers in the next chapter, but for this simple language we can quickly create one. The parser needs to collect edges so we will use linked lists for this, so it is natural to make an empty DAG contain an empty list of edges, and to make adding edges to a DAG mean prepending them to this list. Such an implementation is as simple as this:
+
+```{r}
+cons <- function(car, cdr) list(car = car, cdr = cdr)
+dag <- function() structure(list(edges = NULL), class = "dag")
+`%=>%` <- function(from, to) c(from, to)
+`+.dag` <- function(dag, edge) {
+    dag$edges <- cons(edge, dag$edges)
+    dag
+}
+```
+
+With only these four functions, we can create a DAG using syntax like this:
+
+```{r, eval=FALSE}
+dag() + 
+  "foo" %=>% "bar" +
+  "bar" %=>% "baz"
+```
+
+It might not be the best syntax we can come up with, but easier to read than nested function calls
+
+```r
+add_edge <- function(dag, from, to) {
+  dag$edges <- cons(c(from, to), dag$edges)
+  dag
+}
+add_edge(add_edge(dag(), "foo", "bar"), "bar", "baz")
+```
+
+Using the pipe operator from `Magritte` might be even more readable, though, for people familiar with it.
+
+```r
+library(magrittr)
+dag() %>% add_edge("foo", "bar") %>% add_edge("bar", "baz")
+```
+
+In any case, we have built a small language that we can parse by defining only four functions—three if we discount the list `cons` function, which isn’t specific to the language.
+
+We used `%=>%` to construct edges. Could we use `=>` instead? The short answer is no. R’s parser will consider this two tokens, ‘=‘ and ‘>’, and although we *could* define a function with that name, using back-quotes to make it a valid identifier, we wouldn’t get an infix operator.
+
+```{r}
+`=>` <- function(from, to) c(from, to)
+`=>`("foo", "bar")
+"foo" => "bar"
+```
+
+If we want to have an infix operator that does not use percentage signs, we have to overload one of operators that R already has—and `=>` is not one of them (greater-equal is `>=`).
+
+Could we use `>` instead, then? This is an R infix operator, so we can overload it. We just need a type for a node to do this. If we keep nodes specified as strings, we would have to change the string operator, and we do not want to do that—it could potentially break a *lot* of existing code—so the best approach would be to define a node class to work with:
+
+```{r}
+node <- function(name) structure(name, class = "node")
+`>.node` <- function(from, to) c(from, to)
+```
+
+With these functions we can create an edge with this syntax:
+
+```{r}
+node("foo") > node("bar")
+```
+
+Changing a `%`-infix operator to `>` changes the precedence, however. A `%`-operator has higher precedence than `+`, which is why we got edges that we could add to the DAG earlier, but `>` has lower precedence than `+`, so we add the left node to the DAG first and only second invoke the `>` operator.
+
+```{r}
+dag() + node("foo") > node("bar")
+```
+
+We can fix this using parentheses, of course:
+
+```{r}
+dag() + (node("foo") > node("bar"))
+```
+
+It is not particularly safe to rely on programmers remembering parentheses, so a better solution would be to get the precedence right. We can do that by choosing a different operator for adding edges to DAGs. If we replace `+` with `|`, for example, we get the right behaviour, since `|` has lower precedence than `>`:
+
+```{r}
+`|.dag` <- function(dag, edge) {
+  dag$edges <- cons(edge, dag$edges)
+  dag
+}
+dag() | node("foo") > node("bar")
+```
+
+There are pros and cons with using operator overloading. Having to explicitly make string tokens into node tokens adds some typing, but on the other hand, we can use this to validate expressions while we parse them and make sure that nodes are actually strings.
+
+Of course, we could also use meta-programming and explicitly traverse expressions to make sure that the `>` operator will be the edge-creating operator instead of string comparison, similar to how we rewrote matrix expressions in the previous chapter.
+
+Returning to the `magrittr` solution for a brief moment, I think it is worth mentioning that designing a language is not all about defining new syntax. The language we are defining here, for specifying graphs, is doing exactly the same as the pipe operator does, so in this particular case we do not *need* to specify a new grammar to get all the benefits we want to achieve. Using pipes we avoid the nested function calls that would make our code hard to read, and we can specify a DAG as a list of edges that we add to it. The pipe operator will be familiar to most programmers, and best of all, if we use it, we do not need to implement any parsing code. We are still creating a DSL, though, when we define the functions to manipulate a DAG! Providing functions that gives you a vocabulary to express domain ideas is also language design. The `dplyr` package is an example of this—it is used together with the pipe operator to string various operations together, so it does not provide much in terms of new syntax, but it provides a very strong language for specifying data manipulation.
+
+Of the various solutions we have explored, my preferred one would be the pipe-based. It makes it easy to extend edge information to more than a from- and a to-node—which is hard with a binary operator—and we can implement it without any language code; we just have to make the DAG the first argument to all the manipulation functions we would add to the language. Of course, this solution is only possible because the language we considered was a simple string of operations. This, of course, is not always the case, so sometimes we do need to do a bit more work.
+
 
 ### Designing semantics
 
@@ -116,7 +221,7 @@ Semantics we want the language to have.
 
 If we always make our parsing code construct a parse tree, then the next step in processing the DSL involves manipulation of this tree to achieve a desired effect. There might be a number of steps involved in this—for example, we rewrote expressions in the matrix expression example in order to optimise computations—but at the end of the processing we will execute the commands the DSL expression describes.
 
-Executing the DSL is sometimes straightforward and can be done as a final traversal of the parse tree. This is what we did with the matrix expressions where the purpose of the DSL was to rewrite expressions rather than evaluating them—the latter being a simple matter of multiplying and adding matrices. In other cases, it makes sense to separate the semantic model and the DSL by having a framework for the actions we want the language to allow for. Having a framework for the semantics of the language lets us develop and test the semantic model separately from the language we use as an interface for it, and it even allows us to have different input languages for manipulating the same semantic model if different people prefer different flavors of DSL—not that I would recommend having many different languages to achieve the same goals.
+Executing the DSL is sometimes straightforward and can be done as a final traversal of the parse tree. This is what we did with the matrix expressions where the purpose of the DSL was to rewrite expressions rather than evaluating them—the latter being a simple matter of multiplying and adding matrices. In other cases, it makes sense to separate the semantic model and the DSL by having a framework for the actions we want the language to allow for. Having a framework for the semantics of the language lets us develop and test the semantic model separately from the language we use as an interface for it, and it even allows us to have different input languages for manipulating the same semantic model if different people prefer different flavours of DSL—not that I would recommend having many different languages to achieve the same goals.
 
 
 
