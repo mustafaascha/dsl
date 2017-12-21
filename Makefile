@@ -2,15 +2,12 @@
 CHAPTERS := 000_header.md \
 			Introduction.md \
 			\
-			part_embedded_languages.md \
 			Matrix_expressions.md \
 			Components_of_a_language.md \
 			\
-			part_parsing.md \
 			Functions_expressions_operators.md \
 			Parsing_and_manipulating_expressions.md \
 			\
-			part_evaluating.md \
 			Environments_and_expressions.md \
 			List_comprehension_and_pattern_matching.md \
 			\
