@@ -1,7 +1,8 @@
 
 PANDOC := pandoc
 
-PANDOC_OPTS_ALL :=  -S --toc \
+PANDOC_OPTS_ALL :=  --standalone --toc \
+					-f markdown+smart \
 					--top-level-division=part \
 					--filter pandoc-crossref
 PANDOC_EPUB_OPTS := $(PANDOC_OPTS_ALL) \
