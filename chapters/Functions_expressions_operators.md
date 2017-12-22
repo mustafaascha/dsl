@@ -169,7 +169,70 @@ This generic dispatch mechanism is obviously extremely flexible, so it can requi
 
 #### Operator overloading
 
+Most operators, with exceptions such as assignments and slot and component access (`@` and `$`), behave as generic functions and can be overloaded. The mechanism for overloading operators is not different from the mechanism for implementing new version of generic functions—if you name a function the right way, it will be invoked when a generic function is called.
 
+For example, to define addition on “a” objects, we need to define the `+.a`, which we could do like this:
+
+```{r}
+`+.a` <- function(e1, e2) {
+  cat("+.a\\n")
+  NextMethod()
+}
+x + 2
+```
+
+Here, we just print some output and then invoke the underlying numeric addition—since the object `x` here is a numeric value as well as an object of class “a”—by invoking `NextMethod`. It is important that we use `NextMethod` here. If we just used addition again, we would be calling `+.a` once again. So do not attempt this:
+
+```r
+`+.a` <- function(e1, e2) {
+  cat("+.a\\n")
+  e1 + e2
+}
+```
+
+This is an infinite recursion and not what you want.
+
+You overload operators exactly like you would define specialisations of generic functions, but there *are* a few differences between the two and how they dispatch. With normal generic functions, you would dispatch based on the first argument. With operators, there are a few heuristics that are there to make sure that the same function is called regardless of the order of the operands. You could easily imagine the pain it would be to debug programs where, switching the order of the operands in addition, would call completely different functions. That doesn’t happen in R, because operations are not *exactly* the same as other generic functions.
+
+If we have defined `+.a` and we try to add a number to `x`, then we can do that in either order, and it will be the `+.a` function that will be called.
+
+```{r}
+x + 3
+3 + x
+```
+
+This is also the case if we add to `x` an object of a different class
+
+```{r}
+x <- 1 ; y <- 3
+class(x) <- "a"
+class(y) <- "b"
+x + y
+y + x
+```
+
+*unless* we have also defined an addition operator for that class.
+
+```{r}
+`+.b` <- function(e1, e2) {
+  cat("+.b\n")
+  NextMethod()
+}
+
+x + y
+y + x
+```
+
+If both “a” and “b” have their own version of addition, then we need a way to resolve which version `x+y` and `y+x` should call. Here, the first operand takes precedence, so it determines which function is called—and you get a well deserved warning for getting up to such shenanigans.
+
+You *might* be able to think up some other rules for how you would want such situations to be resolved. For example, you could say that the most abstract method should be called, so if both `x` and `y` were of class “b” but only `x` was also of class “a”, then we should call `+.b`.
+
+```r
+class(x) <- c("a","b")
+class(y) <- "b"
+```
+
+Unfortunately, you cannot make such rules in the S3 system. It is possible with the S4 system, where you can dispatch generic functions based on multiple arguments, but that goes beyond the scope of this book. We will simply make sure to avoid situations where we have to add different classes of objects that define the same operators—and by constructing grammars appropriately, this is not a problem.
 
 #### Group generics
 
