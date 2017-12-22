@@ -234,9 +234,50 @@ class(y) <- "b"
 
 Unfortunately, you cannot make such rules in the S3 system. It is possible with the S4 system, where you can dispatch generic functions based on multiple arguments, but that goes beyond the scope of this book. We will simply make sure to avoid situations where we have to add different classes of objects that define the same operators—and by constructing grammars appropriately, this is not a problem.
 
+Notice, though, that the combination of multiple classes and `NextMethod` still works as before. We do not have a good method, in the S3 system, to dispatch based on multiple arguments, but we can use `NextMethod` to invoke several methods as we evaluate an operator. If we invoke `+.a` on object `x`, which now has classes “a” and “b”, the call to `NextMethod` in the implementation of that function will invoke `+.b` before *that* function invokes the numeric addition.
+
+```{r}
+class(x) <- c("a", "b")
+x + 2
+x + y
+```
+
+
+
 #### Group generics
 
+There is another way you can overload operators based on their operands’ class: group generics. Group generics, as the name hints, groups several operators. They provide a way for us to define a single function that handles all operators of a given type. For arithmetic and logical operators, "+", "-", "*", "/", "^", "%%", “%/%”, "&", "|", “!”, "==", "!=", "<", "<=", ">=", and “>”, the relevant group generic is `Ops`.
+
+If we define `Ops.c`, then we define function that will be called for all of these operators when used on an element of class “c”.
+
+```{r}
+Ops.c <- function(e1, e2) {
+  cat(paste0("Ops.c (", .Generic, ")\n"))
+  NextMethod()
+}
+
+z <- 2
+class(z) <- "c"
+z + 1
+1 + z
+z ^ 3
+```
+
+The “magical” variable `.Generic` contains the name of the operator that is actually called, and calling `NextMethod` will dispatch to the relevant next implementation of the operator.
+
+If you implement both the `Ops` group generic *and* concrete implementations of some individual operator generics, then the latter takes precedence. If, for example, we have an object of class “a” *and* “c”, where we have defined addition for class “a” and have the group generic for “c”, the addition will invoke the `+.a` function and all other operators will invoke the `Ops.c` function.
+
+```{r}
+class(z) <- c("a", "c")
+1 + z
+2 * z
+```
+
+With `Ops` you have a method for catching all operators that you do not explicitly write specialised generics for.
+
 ### Precedence and evaluation order
+
+
 
 Operator      Usual meaning
 --------      -----------------
