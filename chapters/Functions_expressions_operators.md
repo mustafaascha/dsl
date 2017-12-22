@@ -11,9 +11,164 @@ You could write a whole book about the object-oriented programming systems suppo
 
 #### Objects and classes
 
+The S3 system has a very simple approach to object-orientation. It lets us associate classes with any object (except for `NULL`), but classes are just text strings and there is no structure to them. You can get the classes associated to any object by calling the function `class`:
 
+```{r}
+class(4)
+class("foo")
+class(TRUE)
+class(sin)
+```
+
+You can set the class of an object with the corresponding assignment function
+
+```{r}
+class(sin) <- "foo"
+class(sin)
+```
+
+without this in other ways affecting what the object is or does
+
+```{r}
+sin(0)
+```
+
+There are some limits to which objects you can change the class of—you cannot change the class of literal numbers and strings, for example, so if you attempted this
+
+```r
+class(2) <- "character"
+class("foo") <- "numeric"
+```
+
+you would would get errors. Still, you are generally free to modify the class of objects at any time you want. The class associated with an object is just an object attribute containing one or more class names—in the cases above, all the objects have a single class, but the matrix expressions we created [Chapter @sec:matrix-expressions], for example, had multiple classes. Vectors of class names are used both for multiple inheritance and single inheritance, and there is not formal class structure at all. You can set the classes any way you want. The class attribute is just a vector of strings that are interpreted as class names.
+
+The only thing that makes the class attribute interesting, compared to any other attributes you could associate with objects, is how it is used for dispatching generic functions. When you call a generic function, the actual function that gets called depends on the class of one of its arguments, usually the first (and by default the first).
 
 #### Generic functions
+
+The generic function mechanism in the S3 system is implemented in the `UseMethod` and `NextMethod` functions. To define a generic function, `foo`, you would for example write:
+
+```{r}
+foo <- function(x, y, z) UseMethod("foo")
+```
+
+Calling `foo` would then invoke `UseMethod` that would search for concrete implementations of `foo`. Such functions are identified by their name alone—any function whose name starts with `foo.` is considered an implementation of `foo`, and the one that will be chosen depends on the class of the argument `x`. We haven’t *any* implementations of `foo` yet, so calling the function will just give us an error for now.
+
+```{r}
+foo(1, 2, 3)
+```
+
+However, we can make a default implementation. The default implementation for a generic function—the one that will be used if `UseMethod` can find no better matching implementation—has a name that ends with `.default`. We can implement
+
+```{r}
+foo.default <- function(x, y, z) {
+   cat("default foo\\n")
+}
+```
+
+and this function will be invoked if we call `foo` with an object that doesn’t have a better implementation
+
+```{r}
+foo(1, 2, 3)
+```
+
+To specialise a generic function to specific classes, we just have to define functions with appropriate names. Any function name that begins with `foo.` can be used and will be called if we call `foo` with an object of the appropriate class. To specialise `foo` to `numeric` values, for example, we could write
+
+```{r}
+foo.numeric <- function(x, y, z) {
+   cat("numeric\\n")
+}
+```
+
+and now this function will be called if `x` is numeric
+
+```{r}
+foo(1, 2, 3)
+```
+
+A quick comment here, before we continue exploring how dispatching is done on generic functions for user-defined classes: when we used `UseMethod` in the definition of `foo` we called it with the name “foo”. This is why it looks for that name when it searches for implementations of the generic function. We could have asked it to search for other functions, the name we give the generic function when we defined `foo` is not what determines what we search for when we call the function—that is determined by the name we give `UseMethod`. Further, we have seen it dispatch on the first argument of `foo`, but this is just a default. We *could* give `UseMethod` another object to dispatch on.
+
+```{r}
+bar <- function(x, y, z) UseMethod("foo", y)
+```
+
+I do not recommend doing this—it goes against the conventions used in R—but it is possible and with this function we would dispatch on the `y` argument (and search for the generic function `foo`, not `bar`).
+
+```{r}
+foo("foo",2,3)
+bar("foo",2,3)
+bar(1,"bar",3)
+```
+
+Ok, back to the rules for dispatching. When `UseMethod` is called, it starts to search for functions based on their name. It will take the classes of an object and search those in order. If it doesn’t find any matching function, it will call the default, if it exists.
+
+So, let us consider again `foo` where we have a numeric and a default implementation.
+
+```{r}
+x <- 1
+foo(x, 2, 3)
+```
+
+Here, we have created the object `x` which is numeric, so when we call `foo`, we match the numeric function. But we can chance the class of `x` and see what happens.
+
+```{r}
+class(x) <- c("a", "b", "c")
+foo(x, 2, 3)
+```
+
+Now, because `x` has the classes “a”, “b”, and “c”, but not “numeric”, `UseMethod` doesn’t find the numeric version but hits the default one. We can, of course, define functions for the other classes and see what happens.
+
+```{r}
+foo.a <- function(x, y, z) cat("a\\n")
+foo.b <- function(x, y, z) cat("b\\n")
+foo.c <- function(x, y, z) cat("c\\n")
+foo(x, 2, 3)
+```
+
+Because we now have functions for `x`’s classes, we can find them, and because “a” is the first class, that is the one that will be called. If we change the order of `x`’s classes, we call the other functions—`UseMethod` always calls the first it finds.
+
+```{r}
+class(x) <- c("b", "a", "c")
+foo(x, 2, 3)
+
+class(x) <- c("c", "b", "a")
+foo(x, 2, 3)
+```
+
+When calling `UseMethod` we will find and call the first matching function. The related `NextMethod` function can be invoked to find and call the next function in the chain of classes. To see it in action, we can redefine the three “a”, “b”, and “c”, `foo` implementations and make them call the next function in line.
+
+```{r}
+foo.a <- function(x, y, z) {
+  cat("a\\n")
+  NextMethod()
+}
+foo.b <- function(x, y, z) {
+  cat("b\\n")
+  NextMethod()
+}
+foo.c <- function(x, y, z) {
+  cat("c\\n")
+  NextMethod()
+}
+```
+
+They will all call the next function in line, and since we have a default implementation of `foo`, the last in line will call that one. The order in which they are called depend entirely on the order of `x`’s classes.
+
+```{r}
+class(x) <- c("a", "b", "c")
+foo(x, 2, 3)
+
+class(x) <- c("b", "a", "c")
+foo(x, 2, 3)
+
+class(x) <- c("c", "b", "a")
+foo(x, 2, 3)
+```
+
+This generic dispatch mechanism is obviously extremely flexible, so it can require some discipline to ensure a robust object-oriented design. For the purpose of implementing domain-specific languages, though, we are just interested in how we can use it to add operators to our language.
+
+#### Operator overloading
+
 
 
 #### Group generics
@@ -36,3 +191,6 @@ Operator      Usual meaning
 `&` `&&`	    And
 `|` `||`	    Or
 
+
+
+**FIXME: using {}**
