@@ -20,7 +20,12 @@ lst_to_list <- function(lst) {
 }
 
 
-ctmc <- function() structure(list(from = NULL, rate = NULL, to = NULL), class = "ctmc")
+ctmc <- function() 
+  structure(list(from = NULL, 
+                 rate = NULL, 
+                 to = NULL), 
+            class = "ctmc")
+
 add_edge <- function(ctmc, from, rate, to) {
   ctmc$from <- cons(from, ctmc$from)
   ctmc$rate <- cons(rate, ctmc$rate)
@@ -47,8 +52,56 @@ rate_matrix <- function(ctmc) {
   Q
 }
 
+library(expm)
+transitions_over_time <- function(Q, t) expm(Q * t)
+
+Q <- ctmc() %>% 
+  add_edge("foo", 1, "bar") %>% 
+  add_edge("foo", 2, "baz") %>% 
+  add_edge("bar", 2, "baz") %>% 
+  rate_matrix
+
+P <- Q %>% transitions_over_time(0.2)
+P
+
+evolve <- function(probs, Q, t) {
+  probs <- probs[rownames(Q)]
+  probs %*%transitions_over_time(Q, t)
+}
+
+initial <- c(foo=0.1, bar=0.9, baz=0.0)
+initial %>% evolve(Q, 0.2)
+
+evolve <- function(Q, t, probs) {
+  probs <- probs[rownames(Q)]
+  probs %*%transitions_over_time(Q, t)
+}
+
+Q %>% evolve(0.2, initial)
+probs <- initial
+
 ctmc() %>% 
   add_edge("foo", 1, "bar") %>% 
   add_edge("foo", 2, "baz") %>% 
-  add_edge("bar", 2, "baz") %>% rate_matrix
+  add_edge("bar", 2, "baz") %>% 
+  rate_matrix %>%
+  evolve(0.2, probs)
 
+
+
+
+
+
+
+
+Ops.ctmc <- function(x,y) {
+  cat(.Generic, "\n")
+}
+
+Ops.node <- function(x,y) {
+  cat("node\n")
+}
+
+ctmc() + node("foo")
+node("foo") + ctmc()
+ctmc() + ctmc()
