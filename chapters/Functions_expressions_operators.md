@@ -242,6 +242,32 @@ x + 2
 x + y
 ```
 
+R has unary operators as well as binary operators. The negation operator, `!`, only exists in a unary operator, and you can specialise it for a given class by defining a function that takes as single argument.
+
+```{r}
+`!.a` <- function(x) {
+  cat("Not for a\\n")
+  NextMethod()
+}
+!x
+```
+
+For the `-` and `+` operators, though, we have the same symbol used for both unary and binary operators. Here, we have to use the same function for both—since the only way we identify operator functions is through their name and that would be the same for the unary and binary operators. The way we can determine if the function is called as part of a unary or binary operator is to test if the second argument is missing. If it is, we have a unary operator, if it isn’t, it is binary.
+
+```{r}
+`+.a` <- function(e1, e2) {
+  if (missing(e2)) {
+    cat("Unary\\n")
+  } else {
+    cat("Binary\\n")
+  }
+  NextMethod()
+}
+
+class(x) <- "a"
++x
+2+x
+```
 
 
 #### Group generics
@@ -252,7 +278,7 @@ If we define `Ops.c`, then we define function that will be called for all of the
 
 ```{r}
 Ops.c <- function(e1, e2) {
-  cat(paste0("Ops.c (", .Generic, ")\n"))
+  cat(paste0("Ops.c (", .Generic, ")\\n"))
   NextMethod()
 }
 
@@ -277,6 +303,9 @@ With `Ops` you have a method for catching all operators that you do not explicit
 
 ### Precedence and evaluation order
 
+As soon as we start working with operators, their precedence become important. The syntax for normal function calls makes the evaluation order relatively clear—with nested function calls we have inner and outer functions in an expression, and while that does not give us guarantees about which order parameters to a function will be evaluated in, we do know that arguments to a function will be evaluated before the function itself.[^lazy-eval] With operators, the syntax does not tell us in which order functions will be called. To know that, we need to know the precedence rules.
+
+
 
 
 Operator      Usual meaning
@@ -298,3 +327,7 @@ Operator      Usual meaning
 
 
 **FIXME: using {}**
+
+
+[^lazy-eval]: I am not being entirely honest here. R has lazy evaluation, so there is no guarantee that arguments to a function will be evaluated at all—but if they are, they will be evaluated before we return from the function they are arguments to, so conceptually we can think of them as being evaluated before we call the function.
+
