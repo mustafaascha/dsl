@@ -305,15 +305,49 @@ With `Ops` you have a method for catching all operators that you do not explicit
 
 As soon as we start working with operators, their precedence become important. The syntax for normal function calls makes the evaluation order relatively clear—with nested function calls we have inner and outer functions in an expression, and while that does not give us guarantees about which order parameters to a function will be evaluated in, we do know that arguments to a function will be evaluated before the function itself.[^lazy-eval] With operators, the syntax does not tell us in which order functions will be called. To know that, we need to know the precedence rules.
 
+Precedence rules tell us the order in which operator functions get called by ordering the operators from highest to lowest precedence and by specifying if operators are evaluated from left to right or from right to left. In an expression such as
 
+```r
+x + y * z
+```
 
+we know that the multiplication, `y * z`, is evaluated before the addition, so the expression is equivalent to
+
+```r
+x + (y * z)
+```
+
+because multiplication has higher precedence than addition. With operators at the same level of precedence we might be less aware of the order, but for those, the left-to-right or right-to-left order is also guaranteed by precedence rules. Of the operators you can overload, only the exponentiation operator evaluates right-to-left while all the others evaluate left-to-right, so
+
+```r
+x ^ y ^ z
+```
+
+is equivalent to
+
+```r
+x ^ (y ^ z)
+```
+
+while 
+
+```r
+x * y / z
+```
+
+will be evaluated as
+
+```r
+(x * y) / z
+```
+
+The operators you can overload are listed, from highest to lowest precedence, below:
 
 Operator      Usual meaning
 --------      -----------------
 `[` `[[`	    Indexing
 `^`	          Exponentiation (Evaluates right to left)
 `-` `+`	      Unary minus and plus
-`:`	          Sequence operator
 `%any%`       Special operators
 `*` `/`	      Multiply, divide
 `+` `-`	      Binary add and subtract
@@ -323,11 +357,51 @@ Operator      Usual meaning
 `!`	          Negation
 `&` `&&`	    And
 `|` `||`	    Or
+`:=`          Assignment
 
+In the graph specifications language from the previous chapter we could use addition and `%=>%` together because user-defined infix operators—those defined using percentages symbols—have higher precedence than `+`, so we would construct edges before we would add them to a graph. Using `>` and `|` together works for the same reason. Further, because addition (or logical or) is evaluated from left to right, the `dag()` object we created at the beginning of a graph specification would be added to the first edge, which would produce another graph that then would be added to the next edge and so forth. If the evaluation of addition was right-to-left, we would be adding edges to edges, instead of graphs to edges, which would complicate the implementation of the parser.
 
+The last operator in the table, the `:=` assignment operator, is special in the list. It isn’t actually an operator that is defined in R. You cannot use it as an assignment operator—for that you should use `<-` or `->`—but the R parser recognises it as an infix operator which means that you can use it when you design a domain-specific language.
 
-**FIXME: using {}**
 
 
 [^lazy-eval]: I am not being entirely honest here. R has lazy evaluation, so there is no guarantee that arguments to a function will be evaluated at all—but if they are, they will be evaluated before we return from the function they are arguments to, so conceptually we can think of them as being evaluated before we call the function.
 
+
+
+### Code blocks
+
+A final syntactical component that can be very useful when designing a domain-specific language isn’t an operator but the braces that constructs a block of code. We cannot overload how these are interpreted, but we can certainly find use for them when we create a new language. Before we can exploit them fully, we need to know both how to manipulate expressions and how to evaluate them in different contexts—which we cover in the next chapter and in [Chapter @sec:env_and_expr]—but as a quick example, consider creating an index operator that repeats a statement a number of times. We can define it this way:
+
+```{r}
+`%times%` <- function(n, body) {
+  body <- substitute(body)
+  for (i in 1:n)
+    eval(body, parent.frame())
+}
+```
+
+The 
+
+```r
+  body <- substitute(body)
+```
+
+takes the `body` argument and changes it to an expression so we can evaluate it repeatedly. If we didn’t do this, we would only evaluate it the first time accessed `body`—this is how R’s lazy evaluation works—but using `substitute` we can get the verbatim expression out of the argument. To evaluate it, we then have to use the `eval` function, and to evaluate it in the context where we call the `%times%` operator, we need the calling frame, which we get using `parent.frame` (see [Chapter @@sec:env_and_expr] for more details on evaluation and environments).
+
+The `body` argument to `%times%` can be a single statement
+
+```{r}
+4 %times% cat("foo\\n")
+```
+
+but since `{}` are considered expressions as well, we can also use a sequence of statements as long as we wrap them in braces:
+
+```{r}
+2 %times% {
+  cat("foo\\n")
+  cat("bar\\n")
+}
+```
+
+Because we can use braces to pass blocks of code as arguments to functions, we can use these to create new control structures, like the `%times%` operator above. To fully exploit this, however, we need to understand how we evaluate general expressions in R, and in particular how we control the environment in which we evaluate them, and we need to parse and manipulate expressions to analyse blocks of code and maybe modify them. We will therefore leave further discussion of braces until we have covered those topics.
