@@ -8,7 +8,7 @@ PANDOC_OPTS_ALL :=  --standalone --toc \
 PANDOC_EPUB_OPTS := $(PANDOC_OPTS_ALL) \
 					--default-image-extension=png \
 					-t epub3 --toc-depth=1 \
-					--epub-cover-image=../cover.png
+					--epub-cover-image=../cover.jpg
 
 EPUB_CHAPTERS := $(foreach chapter,$(CHAPTERS),$(chapter))
 
