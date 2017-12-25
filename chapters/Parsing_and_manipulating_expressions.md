@@ -171,23 +171,23 @@ print_expression <- function(expr, indent = "") {
     if (inherits(expr, "srcref")) {
       expr <- paste0("srcref = ", expr)
     }
-    cat(indent, " - ", expr, "\n")
+    cat(indent, " - ", expr, "\\n")
     
   } else if (is.name(expr)) {
     if (expr == "") {
       expr <- "MISSING"
     }
-    cat(indent, " - ", expr, "\n")
+    cat(indent, " - ", expr, "\\n")
     
   } else if (is.pairlist(expr)) {
-    cat(indent, " - ", "[\n")
+    cat(indent, " - ", "[\\n")
     new_indent <- paste0(indent, "       ")
     vars <- names(expr)
     for (i in seq_along(expr)) {
-      cat(indent, "    ", vars[i], " ->\n")
+      cat(indent, "    ", vars[i], " ->\\n")
       print_expression((expr[[i]]), new_indent)
     }
-    cat(indent, "    ]\n")
+    cat(indent, "    ]\\n")
     
   } else {
     print_expression((expr[[1]]), indent)
