@@ -152,6 +152,60 @@ We will discuss environments, scopes, and how expressions are evaluated in much 
 
 ### Exploring expressions
 
+An expression is a recursive data structure and you can explore it as such. We can define expressions in terms of a grammar as this:
+
+```
+EXPRESSION ::= CONSTANT
+            |  NAME
+            |  PAIRLIST
+            |  CALL EXPRESSION_LIST
+EXPRESSION_LIST ::= EXPRESSION 
+                  |  EXPRESSION EXPRESSION_LIST
+```
+
+Of course, for expressions we do not really have a grammar for constructing as such—we use R code—but this is the type declaration for expressions. All expressions are one of the four, and when it is a call there will be other expressions involved. We can explore expressions using recursive functions where the first three meta-variables, `CONSTANT`, `NAME`, and `PAIRLIST` are basic cases and the third, `CALL` is the recursive call.
+
+```{r}
+print_expression <- function(expr, indent = "") {
+  if (is.atomic(expr)) {
+    if (inherits(expr, "srcref")) {
+      expr <- paste0("srcref = ", expr)
+    }
+    cat(indent, " - ", expr, "\n")
+    
+  } else if (is.name(expr)) {
+    if (expr == "") {
+      expr <- "MISSING"
+    }
+    cat(indent, " - ", expr, "\n")
+    
+  } else if (is.pairlist(expr)) {
+    cat(indent, " - ", "[\n")
+    new_indent <- paste0(indent, "       ")
+    vars <- names(expr)
+    for (i in seq_along(expr)) {
+      cat(indent, "    ", vars[i], " ->\n")
+      print_expression((expr[[i]]), new_indent)
+    }
+    cat(indent, "    ]\n")
+    
+  } else {
+    print_expression((expr[[1]]), indent)
+    new_indent <- paste0("  ", indent)
+    for (i in 2:length(expr)) {
+      print_expression(expr[[i]], new_indent)
+    }
+  }
+}
+
+print_expression(quote(2 * x + y))
+print_expression(quote(function(x) x))
+print_expression(quote( (function(x) x)(2)))
+print_expression(quote(function(x, y = 2 * x) x + y))
+```
+
+
+
 ### Rewriting expressions
 
 
