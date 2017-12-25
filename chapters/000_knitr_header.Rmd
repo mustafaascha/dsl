@@ -40,4 +40,27 @@ set.seed(5)
 
 Sys.setenv(LANG = "en")
 
+
+
+cons <- function(car, cdr) list(car = car, cdr = cdr)
+lst_length <- function(lst) {
+  len <- 0
+  while (!is.null(lst)) {
+    lst <- lst$cdr
+    len <- len + 1
+  }
+  len
+}
+lst_to_list <- function(lst) {
+  v <- vector(mode = "list", length = lst_length(lst))
+  index <- 1
+  while (!is.null(lst)) {
+    v[[index]] <- lst$car
+    lst <- lst$cdr
+    index <- index + 1
+  }
+  v
+}
+
+
 ```
