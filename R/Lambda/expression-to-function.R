@@ -1,4 +1,5 @@
 library(magrittr)
+library(rlang)
 
 
 cons <- function(car, cdr) list(car = car, cdr = cdr)
@@ -60,25 +61,19 @@ collect_symbols <- function(expr) {
 
 collect_symbols(function(x) 2 + x + y + z)
 
-library(rlang)
-make_alist <- function(args) {
+make_args_list <- function(args) {
   res <- replicate(length(args), substitute())
   names(res) <- args
-  res
+  as.pairlist(res)
 }
 expr_to_function <- function(expr) {
   expr <- substitute(expr)
   unbound <- collect_symbols_(expr, caller_env())
-  new_function(make_alist(unbound), expr, caller_env())
-}
-
-expr_to_function <- function(expr) {
-  expr <- substitute(expr)
-  unbound <- collect_symbols_(expr, caller_env())
-  new_function(make_alist(unbound), expr, caller_env())
-  eval(call("function", make_alist(unbound), expr), caller_env())
+  new_function(make_args_list(unbound), expr, caller_env())
 }
 
 f <- expr_to_function(2 * x + y)
 f
 f(x = 2, y = 3)
+
+
