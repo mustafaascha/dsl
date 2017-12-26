@@ -6,10 +6,11 @@ make_args_list <- function(args) {
 
 `:=` <- function(header, body) {
   header <- substitute(header)
+  if (is.call(header)) header <- header[-1]
   body <- substitute(body)
-  args <- make_args_list(as.character(header[-1]))
+  args <- make_args_list(as.character(header))
   new_function(args, body, caller_env())
 } 
 
-sapply(1:4, { x } := x**2)
+sapply(1:4, x := x**2)
 mapply({x ; y } := x*y, x = 1:6, y = 1:2)
