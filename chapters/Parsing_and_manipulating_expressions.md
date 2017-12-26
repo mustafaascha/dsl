@@ -307,17 +307,185 @@ collect_symbols(function(x) 2 * x + y + z)
 collect_symbols(function(x) function(y) f(2 * x + y))
 ```
 
-(The value `character(0)` is an empty vector).
-
 Default values can contain unbound variables, and those we collect:
 
 ```{r}
 collect_symbols(function(x, y = 2 * w) 2 * x + y)
 ```
 
+We are not quite done learning about how to explore expressions, though. Or rather, we are not done with learning how to use *non-standard evaluation*, which is what we are implementing in `collect_symbols`—the actual recursive exploration of expressions is as simple as what we have just seen. A function such as `collect_symbols` is a function we could imagine using to write more complicated functionality for a domain-specific language, but calling functions that do their own quoting and that evaluate expressions in scopes that depend on the call-stack introduces a number of complications.
 
+If we write a simple function such as this:
+
+```{r}
+f <- function(expr) collect_symbols(expr)
+```
+
+we might expect it to give us the unbound variables in an expression, but it returns an empty list:
+
+```{r}
+f(2 + y * w)
+```
+
+The reason for this is the combination of the two issues we will have when we try to program with functions that do non-standard evaluation. First, when we use `substitute` in the `collect_symbols` function we get the literal expression the function was called with. When we call the function from `f` this is `expr`. The expression that `f` itself is called with does not get passed along. Second, the environment in which we test for bound variable inside `collect_symbols` is the calling environment. When we call the function from `f` the calling environment is the body of `f`. In this environment, the variable `expo` is defined—it is the formal argument of the function—so it will be considered bound.
+
+We will explore environments and how to program with non-standard evaluation in some detail later, but the general solution to these problems is to avoid using non-standard evaluation in functions you plan to call from other functions. It is a very powerful technique for writing a domain-specific language, but keep it to the interface of the language and not the internal functions you use to implement the language in. For `collect_symbols` we can get around the problem by writing another function that takes as arguments an already quoted expression and the environment we should look for variables in. We can then call this function from `collect_symbols` when we want non-standard evaluation and call the other function directly if we want to use it from other functions.
+
+```{r}
+collect_symbols_ <- function(expr, env) {
+  bound <- c()
+  lst <- collect_symbols_rec(expr, NULL, bound)
+  lst %>% lst_to_list %>% unique %>% 
+    purrr::discard(exists, env) %>%
+    unlist
+}
+collect_symbols <- function(expr) {
+  collect_symbols_(substitute(expr), parent.frame())
+}
+```
 
 ### Manipulating expressions
+
+We can do more than simply inspect expressions. We can also modify them or create new ones from within programs. You cannot modify the two primitive expressions, constants and symbols. They are simply data and there isn’t anything to modify. We can, however, modify calls and pair-lists, although the second is not something we would usually do—we work with pair lists when we create new functions and it is easier to explicitly create a new function than it is to modify the definition of one. Either way, both pair lists and calls can be assigned to by indexing into their components.
+
+To get it out of the way with, we can see an example where we modify a pair list. We can construct the expression for defining a function like this:
+
+```{r}
+f <- quote(function(x) 2 * x)
+f
+```
+
+This is an expression of the type “call”—it is a call to the function `function` that defines functions (try saying that fast)—and its second argument is the pair list that define its arguments.
+
+```{r}
+f[[2]]
+```
+
+If we assign to the elements in this pair list, we provide default arguments to the function. The values we assign must be quoted expressions:
+
+```{r}
+f[[2]][[1]] <- quote(2 * y)
+f
+```
+
+To change the names of function arguments we must change the names of the pair list components which we do using the `names<-` function:
+
+```{r}
+names(f[[2]]) <- c("a")
+f[[3]] <- quote(2 * a)
+f
+```
+
+In this example, we also saw how we can modify the function body through its third component.
+
+Through this example we have actually already seen all we need to know about how to modify call expressions. What we were modifying was just a particular case of a call—the call to `function`. Any other call can be modified the same way.
+
+```{r}
+expr <- quote(2 * x + y)
+expr
+expr[[1]] <- as.symbol("/")
+expr
+expr[[2]][[1]] <- as.symbol("+")
+expr
+```
+
+We can construct new call objects using the `call` function. As its first argument, this function takes the function to call—this can be a symbol or a string and will automatically be quoted. After that you can give it a variable number of arguments that will be evaluated before they are put into the constructed expression. 
+
+```{r}
+call("+", quote(2 * x), quote(y))
+call("+", call("*", 2, quote(x)), quote(y))
+```
+
+If you are creating a call to a function with named arguments, rather than an operator, you can provide those to the `call` function as well:
+
+```{r}
+call("f", a = quote(2 * x), b = quote(y))
+```
+
+It is important that you quote the arguments if you do not want them evaluated. The `call` function will not do it for you.
+
+```{r}
+z <- 2
+call("+", 2 * z, quote(y))
+```
+
+In the `rlang` package you have two additional functions for creating calls. The function `lang` works as the `call` function except that you can specify a namespace in which the called function should be found—not something we will use in this book. The `new_language` function lets you provide the call arguments as an explicit pair list—again something we will not explore further in this book.
+
+```{r}
+library(rlang)
+lang("+", quote(2 * x), quote(y))
+new_language(as.symbol("+"), pairlist(quote(2 * x), quote(y)))
+```
+
+The `rlang` package is worth exploring if you plan to do much meta-programming in R. It provides a number of functions for manipulating and creating expressions and functions and for manipulating environments. We will explore the package more in [Chapter @sec:env_and_expr].
+
+If the call you are making is to `function` there is one extra compilation. This function needs a pair list as its second argument, so you will have to make such a list. If you want to create a function without default parameters, you need to make a list with “missing” elements at named positions. The way to make a missing argument is by calling `substitute` without arguments, so a function that creates a list of function parameters without default arguments can look like this:
+
+```{r}
+make_args_list <- function(args) {
+  res <- replicate(length(args), substitute())
+  names(res) <- args
+  as.pairlist(res)
+}
+```
+
+and we can use it to construct a call to `function` like this:
+
+```{r}
+f <- call("function", 
+          make_args_list(c("x", "y")), 
+          quote(2 * x + y))
+f
+```
+
+Remember, however, that this is an expression for creating a function, it is not the function itself and it does not behave like a function.
+
+```{r}
+f(2, 3)
+```
+
+The error message here looks a bit odd. R is not complaining that `f` is not a function but that the function `f` cannot be found. This is because R will look for functions when you use a symbol for a function call and will not confuse the value `f` with the function `f`, and here we only have a value. To get the actual function, we need to evaluate the call.
+
+```{r}
+f <- eval(f)
+f
+f(2, 3)
+```
+
+A more direct way of creating a function is using the `new_function` function from the `rlang` package:
+
+```{r}
+f <- new_function(make_args_list(c("x", "y")), 
+                  quote(2 * x + y))
+f
+f(2, 3)
+```
+
+As a final example, we can try to combine the expression creating methods we have just seen with the expression exploration functions from the previous section to translate expressions with unbound variables into functions. We can collect all unbound variables in an expression using the `collect_symbols_` function from earlier and then use `new_function` to create the function:
+
+```{r}
+expr_to_function <- function(expr) {
+  expr <- substitute(expr)
+  unbound <- collect_symbols_(expr, caller_env())
+  new_function(make_args_list(unbound), expr, caller_env())
+}
+```
+
+Here, I have used another function from `rlang`, `caller_env`. This function does the same as the `parent.frame` function we have used earlier, but has a more telling name, so if we have loaded `rlang` anyway, I prefer to use it over `parent.frame`.
+
+The `expr_to_function` does exactly what we intended it to, it creates a function from an expression, whose arguments are the unbound variables in the expression.
+
+```{r}
+f <- expr_to_function(2 * x + y)
+f
+f(x = 2, y = 3)
+g <- expr_to_function(function(x) 2 * x + y)
+g
+g(y = 3)(x = 2)
+```
+
+Since the order the variables in the function will depend on the order they are observed in the expression, and whatever order the `unique` function will leave them in, calling the resulting function is probably best done with named arguments…
+
 
 
 [^substitute-global-scope]: The `substitute` function will replace variables by the value they contain in the current scope or in an environment you provide as a second argument, *except* for variables in the global environment. Those variables are left alone. If you experiment with `substitute`, be aware that it behaves differently inside the scope of a function from how it behaves in the global scope.
