@@ -3,7 +3,7 @@ PANDOC := pandoc
 
 PANDOC_OPTS_ALL :=  --standalone --toc \
 					-f markdown+smart \
-					--top-level-division=part \
+					--top-level-division=chapter \
 					--filter pandoc-crossref
 PANDOC_PDF_OPTS := $(PANDOC_OPTS_ALL) \
 					--default-image-extension=pdf \

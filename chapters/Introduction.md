@@ -1,5 +1,5 @@
 
-## Introduction
+# Introduction
 
 This book gives an introduction to embedded domain-specific languages in R. The term *domain-specific languages,* or DSL, refers to programming languages specialised for a particular purpose, as opposed to general purpose programming languages. Domain-specific languages ideally give you a precise way of specifying tasks you want to do, and goals you want to achieve, within a specific context. Regular expressions are one example of a domain-specific language, where you have a specialised notation to express patterns of text. You can use this domain-specific language to define text strings to search for or specify rules for modifying text. Regular expressions are often considered very hard to read, but they do provide a potent language for describing text patterns. Another example of a domain specific language is SQL---a language specialised for extracting from and modifying in a relational database. With SQL, you have a very expressive domain-specific language in which you can specify rules for which data points in a database you want to access or modify.
 
@@ -127,6 +127,6 @@ print(res, signif = 3, order = "mean")
 
 The automatic solution is only slightly slower than the optimal solution and about a factor of six better than the default evaluation.
 
-### Who this book is for
+## Who this book is for
 
 This book is aimed at experienced R programmers. Some of the concepts we cover in this book are advanced, so at the very least you should be familiar with functional and object-oriented programming in R (although the next chapter will give you a reminder of the object-oriented programming features we will use). It will be helpful to have some experience with meta-programming when it comes to evaluating expressions in contexts that interact with the surrounding R code. However, [Chapter @sec:env_and_expr] gives a crash course in the techniques we will use in this book, so you should be able to pick it up with a little effort from there.

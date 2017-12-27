@@ -1,4 +1,4 @@
-## Components of a programming language
+# Components of a programming language
 
 While this is not a book about compilers and computer languages in general, it will be helpful to have some basic understanding of the components of software that parse and manipulate computer languages—or at least domain specific computer languages.
 
@@ -7,7 +7,7 @@ When we write software for processing languages, we usually structure this such 
 This chapter describes the various components of computer languages and the phases involved in processing a domain specific language. 
 
 
-### Text, tokens, grammars, and semantics
+## Text, tokens, grammars, and semantics
 
 First, we need to define some terminology. Since this book is not about language or parser theory, so I will stick with some informal working definitions, but there are a few terms we need in this chapter that we need to define.
 
@@ -58,7 +58,7 @@ Grammatical statements are those a parser will consider valid. It is, if we retu
 
 For embedded DSLs, the semantics of a program is simply what we do to evaluate an expression once we have parsed it. We are not going to formally specify semantics or implement interpreters, so for the purposes of this book, the semantics part of a DSL is just plain old R programs. More often than not, what we use embedded DSLs for is an interface to some library or framework. It is the functionality of this framework that provides the semantics of what we do with the DSL, the actual language is just an interface to the framework.
 
-### Specifying a grammar
+## Specifying a grammar
 
 Since we are using R to parse expressions, we do not have much flexibility in what can be considered tokens and we have some limitations in the kinds of grammar we can implement, but for the grammars we also have some flexibility. To specify grammars in this book, I will take a traditional approach and describe them in terms of “rules” for generating sentences valid within a grammar. Consider the following grammar:
 
@@ -214,7 +214,7 @@ Returning to the `magrittr` solution for a brief moment, I think it is worth men
 Of the various solutions we have explored, my preferred one would be the pipe-based. It makes it easy to extend edge information to more than a from- and a to-node—which is hard with a binary operator—and we can implement it without any language code; we just have to make the DAG the first argument to all the manipulation functions we would add to the language. Of course, this solution is only possible because the language we considered was a simple string of operations. This, of course, is not always the case, so sometimes we do need to do a bit more work.
 
 
-### Designing semantics
+## Designing semantics
 
 The reason we write domain specific languages is to achieve some effect—we want to associate meaning, or semantics, to expressions in the DSL and we want our DSL expressions to achieve some result, whether that is executing some computations or building some data structures. The purpose of the DSL is simply to provide a convenient interface to whatever 
 Semantics we want the language to have.

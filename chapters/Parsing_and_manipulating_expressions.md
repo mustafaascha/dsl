@@ -1,8 +1,8 @@
-## Parsing and manipulating expressions {#sec:parsing_and_manipulating_expressions}
+# Parsing and manipulating expressions {#sec:parsing_and_manipulating_expressions}
 
 A powerful feature of the R programming language is that it readily allows us to treat expressions in the language itself as data that we can examine and modify as part of a program—so-called “meta-programming”. From within a program we can take a piece of R code and computationally manipulate it before we evaluate it. We just need to get hold of the code *before* it is evaluated, but there are several ways to do that. The simplest is to “quote” expressions, which leaves them as unevaluated expressions.
 
-### Quoting and evaluating
+## Quoting and evaluating
 
 If you write an expression such as
 
@@ -150,7 +150,7 @@ g(2 * x + y)
 We will discuss environments, scopes, and how expressions are evaluated in much more detail in [Chapter @sec:env_and_expr]. For the remainder of this chapter, we will focus on manipulating expressions and not evaluating them.
 
 
-### Exploring expressions
+## Exploring expressions
 
 An expression is a recursive data structure and you can explore it as such. We can define expressions in terms of a grammar as this:
 
@@ -344,7 +344,7 @@ collect_symbols <- function(expr) {
 }
 ```
 
-### Manipulating expressions
+## Manipulating expressions
 
 We can do more than simply inspect expressions. We can also modify them or create new ones from within programs. You cannot modify the two primitive expressions, constants and symbols. They are simply data and there isn’t anything to modify. We can, however, modify calls and pair-lists, although the second is not something we would usually do—we work with pair lists when we create new functions and it is easier to explicitly create a new function than it is to modify the definition of one. Either way, both pair lists and calls can be assigned to by indexing into their components.
 

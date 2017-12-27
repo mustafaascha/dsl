@@ -1,8 +1,8 @@
-## Examples: Lambda expressions and CTMCs
+# Examples: Lambda expressions and CTMCs
 
 With the techniques we have seen so far, we are now able to implement some useful domain-specific languages. In this chapter, we examine two examples: lambda-expressions and continuous time Markov chains.
 
-### Lambda expressions
+## Lambda expressions
 
 ```{r}
 make_args_list <- function(args) {
@@ -34,4 +34,4 @@ mapply(.(x,y) := x*y, x = 1:6, y = 1:2)
 
 
 
-### Continuous time Markov chains
+## Continuous time Markov chains

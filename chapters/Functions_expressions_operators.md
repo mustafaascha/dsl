@@ -1,15 +1,15 @@
 
-## Functions, classes and operators {#sec:functions-classes-operators}
+# Functions, classes and operators {#sec:functions-classes-operators}
 
 Everything you do in R, you do with functions, so if you want to implement a domain specific language, you must do so by writing functions. All the actions your new DSL should support, you must implement using functions, and should you want a special syntax for your DSL, you will have to write functions for parsing this syntax. When implementing an embedded DSL, as we shall see, much of the parsing can be outsourced to R’s parser. The price for this is some restrictions to the syntax for the DSL—the DSL must be syntactically valid R code. We cannot construct arbitrary syntaxes for embedded languages, but by using operator overloading or meta-programming, and by defining new infix operators, we do have some flexibility in designing our DSLs.
 
 In the previous two chapters we have already seen examples of how to use both operator overloading and meta-programming to treat R expressions as expressions in an embedded language. The purpose of this chapter is to go into more detail of the operator option while the next chapter will cover the option of explicitly manipulating expressions through meta-programming.
 
-### The S3 object-oriented programming system
+## The S3 object-oriented programming system
 
 You could write a whole book about the object-oriented programming systems supported by R—I know, because I have written such a book—but for the purpose of operator overloading and implementing DSL parsers, we only need a few of the object-orientation features and this section will give you a quick introduction to those. We will only use the simplest object-orientation system in this book, the S3 system.If you are already familiar with the S3 system, feel free to skip ahead to the next section.
 
-#### Objects and classes
+### Objects and classes
 
 The S3 system has a very simple approach to object-orientation. It lets us associate classes with any object (except for `NULL`), but classes are just text strings and there is no structure to them. You can get the classes associated to any object by calling the function `class`:
 
@@ -44,7 +44,7 @@ you would would get errors. Still, you are generally free to modify the class of
 
 The only thing that makes the class attribute interesting, compared to any other attributes you could associate with objects, is how it is used for dispatching generic functions. When you call a generic function, the actual function that gets called depends on the class of one of its arguments, usually the first (and by default the first).
 
-#### Generic functions
+### Generic functions
 
 The generic function mechanism in the S3 system is implemented in the `UseMethod` and `NextMethod` functions. To define a generic function, `foo`, you would for example write:
 
@@ -167,7 +167,7 @@ foo(x, 2, 3)
 
 This generic dispatch mechanism is obviously extremely flexible, so it can require some discipline to ensure a robust object-oriented design. For the purpose of implementing domain-specific languages, though, we are just interested in how we can use it to add operators to our language.
 
-#### Operator overloading
+### Operator overloading
 
 Most operators, with exceptions such as assignments and slot and component access (`@` and `$`), behave as generic functions and can be overloaded. The mechanism for overloading operators is not different from the mechanism for implementing new version of generic functions—if you name a function the right way, it will be invoked when a generic function is called.
 
@@ -270,7 +270,7 @@ class(x) <- "a"
 ```
 
 
-#### Group generics
+### Group generics
 
 There is another way you can overload operators based on their operands’ class: group generics. Group generics, as the name hints, groups several operators. They provide a way for us to define a single function that handles all operators of a given type. For arithmetic and logical operators, "+", "-", "*", "/", "^", "%%", “%/%”, "&", "|", “!”, "==", "!=", "<", "<=", ">=", and “>”, the relevant group generic is `Ops`.
 
@@ -301,7 +301,7 @@ class(z) <- c("a", "c")
 
 With `Ops` you have a method for catching all operators that you do not explicitly write specialised generics for.
 
-### Precedence and evaluation order
+## Precedence and evaluation order
 
 As soon as we start working with operators, their precedence become important. The syntax for normal function calls makes the evaluation order relatively clear—with nested function calls we have inner and outer functions in an expression, and while that does not give us guarantees about which order parameters to a function will be evaluated in, we do know that arguments to a function will be evaluated before the function itself.[^lazy-eval] With operators, the syntax does not tell us in which order functions will be called. To know that, we need to know the precedence rules.
 
@@ -369,7 +369,7 @@ The last operator in the table, the `:=` assignment operator, is special in the 
 
 
 
-### Code blocks
+## Code blocks
 
 A final syntactical component that can be very useful when designing a domain-specific language isn’t an operator but the braces that constructs a block of code. We cannot overload how these are interpreted, but we can certainly find use for them when we create a new language. Before we can exploit them fully, we need to know both how to manipulate expressions and how to evaluate them in different contexts—which we cover in the next chapter and in [Chapter @sec:env_and_expr]—but as a quick example, consider creating an index operator that repeats a statement a number of times. We can define it this way:
 
