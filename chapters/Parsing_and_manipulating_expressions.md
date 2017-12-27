@@ -473,6 +473,8 @@ expr_to_function <- function(expr) {
 
 Here, I have used another function from `rlang`, `caller_env`. This function does the same as the `parent.frame` function we have used earlier, but has a more telling name, so if we have loaded `rlang` anyway, I prefer to use it over `parent.frame`.
 
+In this call to `new_function` we provide three arguments; before we only provided two. The arguments we provided earlier were the list of formal arguments and the expression that should be the body of the function—those we provide again here. The third argument is the enclosing environment of the function; where the function will find the value of variables that are not bound within the function itself as parameters or local variables. Since we consider variables found in the caller environment as bound, we have to make sure that the function we create can actually find them, so we put the function in the same environment. If this seems mysterious to you, return to this example after you have read [Chapter @sec:env_and_expr] where we go into environments in much more detail.
+
 The `expr_to_function` does exactly what we intended it to, it creates a function from an expression, whose arguments are the unbound variables in the expression.
 
 ```{r}
