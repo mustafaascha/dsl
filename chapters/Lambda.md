@@ -1,6 +1,6 @@
-# Examples: Lambda expressions and Markov chains
+# Lambda expressions
 
-With the techniques we have seen so far, we are now able to implement some useful domain-specific languages. In this chapter, we examine two examples: lambda-expressions and continuous time Markov chains.
+With the techniques we have seen so far, we are now able to implement some useful domain-specific languages. In this chapter, we examine a toy example, lambda-expressions, something we would probably not use in real-world code, but which is an excellent example of code doing something potentially useful and a chance for us to experiment with syntax.
 
 ## Lambda expressions
 
@@ -89,8 +89,27 @@ and now the example from above will work.
 mapply(x(x,y) := x*y, x = 1:6, y = 1:2)
 ```
 
-Implementing syntactic sugar for lambda expressions as we have just done only saves us very little typing compared to using `function` expressions and potentially does more harm than good—after all, everyone should be familiar with `function` expressions but they might not be with our home-made syntax for the same. Consequently, I would not recommend that you write new syntax for language constructions that are already implemented in R. We implemented the lambda expressions here simply as an example that illustrates how we can construct new syntax with very little code. After that warmup exercise, we can attempt to write a DSL we could imagine using a real world code.
 
-## Markov chains
+## Experiments with alternative syntax
 
+Using an assignment operator to define a function in this way might not be the most obvious syntax you could choose, but we have plenty of options for playing around with alternatives.
 
+```{r}
+lambda <- structure(NA, class = "lambda")
+`[.lambda` <- function(x, ...) {
+  spec <- eval(substitute(alist(...)))
+  n <- length(spec)
+  args <- make_args_list(spec[-n])
+  body <- spec[[n]]
+  new_function(args, body, caller_env())
+}
+```
+
+```{r}
+sapply(1:4, lambda[x, 4 * x**2])
+mapply(lambda[x, y, y*x], x = 1:4, y = 4:7)
+```
+
+## Don’t do this at home
+
+Implementing syntactic sugar for lambda expressions as we have just done only saves us very little typing compared to using `function` expressions and potentially does more harm than good—after all, everyone should be familiar with `function` expressions but they might not be with our home-made syntax for the same. Consequently, I would not recommend that you write new syntax for language constructions that are already implemented in R. We implemented the lambda expressions here simply as an example that illustrates how we can construct new syntax with very little code.

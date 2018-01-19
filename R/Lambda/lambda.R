@@ -1,3 +1,5 @@
+library(rlang)
+
 make_args_list <- function(args) {
   res <- replicate(length(args), substitute())
   names(res) <- args
@@ -12,7 +14,15 @@ make_args_list <- function(args) {
   new_function(args, body, caller_env())
 } 
 
-sapply(1:4, x := x**2)
-mapply({x ; y } := x*y, x = 1:6, y = 1:2)
 
+lambda <- structure(NA, class = "lambda")
+`[.lambda` <- function(x, ...) {
+  spec <- eval(substitute(alist(...)))
+  n <- length(spec)
+  
+  args <- make_args_list(spec[-n])
+  body <- spec[[n]]
+  new_function(args, body, caller_env())
+}
 
+sapply(1:4, lambda[x, 4 * x**2])

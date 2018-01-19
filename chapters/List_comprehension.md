@@ -1,6 +1,4 @@
-# List comprehension and pattern matching
-
-## List comprehension
+# List comprehension
 
 ```{r}
 library(rlang)

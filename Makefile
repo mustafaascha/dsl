@@ -7,10 +7,12 @@ CHAPTERS := 000_header.md \
 			\
 			Functions_expressions_operators.md \
 			Parsing_and_manipulating_expressions.md \
-			Lambda_and_CTMC.md \
+			Lambda.md \
 			\
 			Environments_and_expressions.md \
-			List_comprehension_and_pattern_matching.md \
+			CTMCs.md \
+			List_comprehension.md \
+			Pattern_matching.md \
 			\
 			xx_conclusions.md
 
