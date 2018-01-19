@@ -1,6 +1,7 @@
 library(magrittr)
 library(rlang)
 
+
 cons <- function(car, cdr) list(car = car, cdr = cdr)
 lst_length <- function(lst) {
   len <- 0
@@ -76,50 +77,65 @@ add_edge <- function(ctmc, from, rate, to) {
   ctmc$from <- cons(from, ctmc$from)
   ctmc$to <- cons(to, ctmc$to)
 
-  r <- substitute(rate)
-  ctmc$rate <- cons(list(expr = r, env = caller_env()), ctmc$rate)
-  ctmc$params <- cons(collect_symbols_q(r, caller_env()), ctmc$params)
+  r <- enquo(rate)
+  ctmc$rate <- cons(r, ctmc$rate)
+  ctmc$params <- cons(collect_symbols_q(r, get_env(r)), ctmc$params)
 
   ctmc
 }
 
-rate_matrix_function <- function(ctmc) {
-  from <- lst_to_list(ctmc$from)
-  to <- lst_to_list(ctmc$to)
-  rate <- lst_to_list(ctmc$rate)
-  nodes <- c(from, to) %>% unique %>% unlist
-  parameters <- lst_to_list(ctmc$params) %>% unique
-  n <- length(ctmc$nodes)
+print.ctmc <- function(x, ...) {
+  from <- lst_to_list(x$from)
+  to <- lst_to_list(x$to)
+  rate <- lst_to_list(x$rate)
+  parameters <- lst_to_list(x$params) %>%
+    purrr::discard(is_null) %>% unique
 
-  f <- function() {
-    Q <- matrix(0, nrow = n, ncol = n)
-    rownames(Q) <- colnames(Q) <- nodes
-    for (i in seq_along(from)) {
-      Q[from[[i]], to[[i]]] <- eval(rate[[i]]$expr, rate[[i]]$env)
-    }
-    diag(Q) <- -rowSums(Q)
-    Q
+  cat("CTMC:\n")
+  cat("parameters:", paste(parameters), "\n")
+  cat("transitions:\n")
+  for (i in seq_along(from)) {
+    cat(from[[i]], "->", to[[i]], "\t[", deparse(rate[[i]]), "]\n")
   }
-  formals(f) <- make_args_list(ctmc$parameters)
-
-  f
+  cat("\n")
 }
 
-#print.ctmc <- function(x, ...) {
-#  cat(ctmc$nodes, "\n")
-#}
-
-library(expm)
-transition_probabilities <- function(Q, t) expm(Q * t)
 
 
 m <- ctmc() %>%
   add_edge("foo", a, "bar") %>%
   add_edge("foo", 2*a, "baz") %>%
   add_edge("bar", b, "baz")
-
-%>%
-  rate_matrix_function(a = 2, b = 4)
-
-m$make_rate_matrix(2,3)
 m
+
+rate_matrix_function <- function(ctmc) {
+  from <- lst_to_list(ctmc$from)
+  to <- lst_to_list(ctmc$to)
+  rate <- lst_to_list(ctmc$rate)
+
+  nodes <- c(from, to) %>% unique %>% unlist
+  parameters <- lst_to_list(ctmc$params) %>%
+    purrr::discard(is_null) %>% unique
+
+  n <- length(nodes)
+
+  f <- function() {
+    Q <- matrix(0, nrow = n, ncol = n)
+    rownames(Q) <- colnames(Q) <- nodes
+    for (i in seq_along(from)) {
+      Q[from[[i]], to[[i]]] <- eval_tidy(rate[[i]], environment())
+    }
+    diag(Q) <- -rowSums(Q)
+    Q
+  }
+  formals(f) <- make_args_list(parameters)
+
+  f
+}
+
+q <- m %>% rate_matrix_function
+q
+q(a = 2, b = 4)
+
+library(expm)
+transition_probabilities <- function(Q, t) expm(Q * t)
