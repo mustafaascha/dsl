@@ -1,4 +1,4 @@
-# Examples: Lambda expressions and CTMCs
+# Examples: Lambda expressions and Markov chains
 
 With the techniques we have seen so far, we are now able to implement some useful domain-specific languages. In this chapter, we examine two examples: lambda-expressions and continuous time Markov chains.
 
@@ -91,5 +91,6 @@ mapply(x(x,y) := x*y, x = 1:6, y = 1:2)
 
 Implementing syntactic sugar for lambda expressions as we have just done only saves us very little typing compared to using `function` expressions and potentially does more harm than good—after all, everyone should be familiar with `function` expressions but they might not be with our home-made syntax for the same. Consequently, I would not recommend that you write new syntax for language constructions that are already implemented in R. We implemented the lambda expressions here simply as an example that illustrates how we can construct new syntax with very little code. After that warmup exercise, we can attempt to write a DSL we could imagine using a real world code.
 
-## Continuous time Markov chains
+## Markov chains
+
 
