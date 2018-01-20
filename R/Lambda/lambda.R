@@ -14,6 +14,18 @@ make_args_list <- function(args) {
   new_function(args, body, caller_env())
 } 
 
+lambda <- function(...) {
+  spec <- eval(substitute(alist(...)))
+  n <- length(spec)
+  
+  args <- make_args_list(spec[-n])
+  body <- spec[[n]]
+  new_function(args, body, caller_env())
+}
+
+sapply(1:4, lambda(x, 4 * x**2))
+mapply(lambda(x, y, y*x), x = 1:4, y = 4:7)
+
 
 lambda <- structure(NA, class = "lambda")
 `[.lambda` <- function(x, ...) {
@@ -26,3 +38,4 @@ lambda <- structure(NA, class = "lambda")
 }
 
 sapply(1:4, lambda[x, 4 * x**2])
+mapply(lambda[x, y, y*x], x = 1:4, y = 4:7)

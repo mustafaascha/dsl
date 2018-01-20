@@ -94,6 +94,31 @@ mapply(x(x,y) := x*y, x = 1:6, y = 1:2)
 
 Using an assignment operator to define a function in this way might not be the most obvious syntax you could choose, but we have plenty of options for playing around with alternatives.
 
+Since the functionality we have implemented is just a single function, we could start with just that. There is no reason to have a special syntax if all we need is a single function, so we could implement lambda expressions as this:
+
+```{r}
+lambda <- function(...) {
+  spec <- eval(substitute(alist(...)))
+  n <- length(spec)
+  args <- make_args_list(spec[-n])
+  body <- spec[[n]]
+  new_function(args, body, caller_env())
+}
+```
+
+The idea here is that the `lambda` function will take a number of arguments where the last argument is the function body and the preceding are the parameters of the lambda expression.
+
+```{r}
+sapply(1:4, lambda(x, 4 * x**2))
+mapply(lambda(x, y, y*x), x = 1:4, y = 4:7)
+```
+
+The `eval(substitute(alist(...)))` expression might look a little odd if you are not used to it, but what we do is that we take the variable number of arguments, captured by the three dots argument, and create an expression that makes those into a list. The function `alist`, unlike `list`, will not evaluate the expressions but keep the arguments as they are, which is what we want in this case. The `substitute` expression just creates the expression, so we need to evaluate it, which we do with `eval`, to actually get the list. Once we have the list, we simply make the first arguments into function parameters and the last into the body of the lambda expression and create the function.
+
+In production code, we probably should add some checks to make sure that the lambda expression parameters are symbols and not general expressions and such, but the full functionality for lambda expressions is present in this one function.
+
+Of course, the `lambda` function does not behave like a normal function. The “non-standard evaluation” (NSE) we apply to make a function out of the arguments to `lambda` is very different from how functions normally behave, where the arguments we provide are considered values rather than symbols and expressions. To make it clear from syntax that something different is happening, you might want to change the syntax slightly. For example, instead of using parentheses, we could go for square brackets. We can implement a version that uses those like this:
+
 ```{r}
 lambda <- structure(NA, class = "lambda")
 `[.lambda` <- function(x, ...) {
@@ -105,10 +130,14 @@ lambda <- structure(NA, class = "lambda")
 }
 ```
 
+and use it like this:
+
 ```{r}
 sapply(1:4, lambda[x, 4 * x**2])
 mapply(lambda[x, y, y*x], x = 1:4, y = 4:7)
 ```
+
+The approach here is to make `lambda` an object with a class we can use for defining a special case of the subscript operator. The only purpose of `lambda` is dispatch the subscript function to the right specialisation, and that specialisation of the subscript operator does exactly what the `lambda` function above did. The only difference is that it takes an extra first argument, which is the `lambda` object. We don’t use it for anything so we simply ignore it.
 
 ## Don’t do this at home
 
