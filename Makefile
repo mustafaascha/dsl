@@ -10,8 +10,8 @@ CHAPTERS := 000_header.md \
 			Lambda.md \
 			\
 			Environments_and_expressions.md \
-			CTMCs.md \
 			List_comprehension.md \
+			CTMCs.md \
 			Pattern_matching.md \
 			\
 			xx_conclusions.md
