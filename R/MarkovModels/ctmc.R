@@ -139,3 +139,24 @@ q(a = 2, b = 4)
 
 library(expm)
 transition_probabilities <- function(Q, t) expm(Q * t)
+
+ff <- function(expr, data) {
+  eval(expr[[2]], data, environment(expr))
+}
+ffq <- function(expr, data) {
+  expr <- eval(substitute(~ expr))
+  environment(expr) <- rlang::caller_env()
+  ff(expr, data)
+}
+
+g <- function(x, y, z) {
+  w <- x + y + z
+  ff( ~ w + u + v, data.frame(u = 1:4, v = 1:4))
+}
+h <- function(x, y, z) {
+  w <- x + y + z
+  ffq(w + u + v, data.frame(u = 1:4, v = 1:4))
+}
+
+g(1:4, 1:4, 1:4) == (1:4 + 1:4 + 1:4) + 1:4 + 1:4
+h(1:4, 1:4, 1:4) == (1:4 + 1:4 + 1:4) + 1:4 + 1:4

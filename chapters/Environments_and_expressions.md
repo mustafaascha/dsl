@@ -208,7 +208,239 @@ for (i in 1:3) print(adders[[i]](0))
 
 ## Quotes and non-standard evaluation
 
+What we have seen so far in this chapter is the standard way to evaluate expressions, but as you can probably guess, the reason we call it the standard way is because there are alternatives to it—non-standard evaluation. That would be any other way we could evaluate expressions.
+
+Actually, even non-standard evaluation follows the rules for looking up variable to value mappings that standard evaluation follows. We have a chain of environments and we search them in turn. With non-standard evaluation, we just chain together environments in alternative ways.
+
+To implement non-standard evaluation we first need an expression to evaluate—rather than the value that is the result of evaluating one. We have already seen two ways of obtaining such an expression: we have used `quote` to get an expression from a literal expression or we can use `substitute` to translate a function argument into an expression. There are other ways to create quoted expressions—see e.g. functions `expression` and `bquote`—and `substitute` can be used for more than simply translating function arguments into expressions, but `quote` and `substitute` on arguments suffices for most uses of non-standard evaluation. They both give us a quoted expression with no environment associated with it.
+
+```{r}
+ex1 <- quote(2 * x + y)
+ex1
+f <- function(ex) substitute(ex)
+ex2 <- f(2 * x + y)
+ex2
+```
+
+When implementing lambda expressions we used such expressions to create new functions. 
+
+```{r}
+g <- rlang::new_function(alist(x=, y=), body = ex1)
+g
+g(1,3)
+```
+
+A more direct way to evaluate an expression is using `eval`:
+
+```{r}
+x <- 1
+y <- 3
+eval(ex1)
+```
+
+With `eval`, we will evaluate the expression in the environment where we call `eval` by default, so above we evaluated `ex1` in the global environment and in the example below we evaluate it in the local environment of calls to function `h`:
+
+```{r}
+h <- function(x, y) eval(ex1)
+h
+h(1,3)
+```
+
+If we use the default environment in calls to `eval`, we get standard evaluation, but we do not *have* to use the default environment. We can provide an environment to `eval` that we want it to evaluate the expression in. For example, we can make function `h` evaluate `ex1` in the calling environment instead of its own local environment:
+
+```{r}
+h <- function(x, y) eval(ex1, rlang::caller_env())
+x <- y <- 1
+h(4,4)
+```
+
+Here, we call `h` from the global environment where `x` and `y` are set to one. Even though the local variables in the call to `h` are four and four, `2 * x + y` evaluates to three because it is the values of `x` and `y` in the global environment that are used.
+
+Similarly, we can use an alternative environment for functions we create. By default, `new_function` will use the environment where we create the function, so for example, we can create a function that creates a closure this way:
+
+```{r}
+f <- function(x) rlang::new_function(alist(y=), ex1)
+f(2)
+f(2)(2)
+```
+
+We can provide an environment to `new_function`, however, to change this behaviour. Consider, for example, this function:
+
+```{r}
+g <- function(x) {
+  rlang::new_function(alist(y=), ex1, rlang::caller_env())
+}
+g(2)
+g(2)(2)
+```
+
+When we call `g` we get a new function, but *this* function will be evaluated in the scope where we *call* `g`, not the scope *inside* the call to `g`. Thus, the argument `x` to `g` will not be used when evaluating `2 * x + y`. In this example, we instead use the global variable `x`, which we set to one above.
+
+With `eval`, the environment parameter doesn’t actually have to be an environment. You can use a `list` or a `data.frame` (which is strictly speaking also a `list`) instead.
+
+```{r}
+eval(ex1, list(x = 4, y = 8))
+df <- data.frame(x = 1:4, y = 1:4)
+eval(ex1, df)
+```
+
+Evaluating expressions in the scope of lists and data frames is a powerful tool exploited in domain specific languages such as `dplyr`, but lists and data frames do not have the graph structure that environments have, which begs the question: if we do not find a variable in the list or data frame, where do we find it when we call `eval`? To determine this, `eval` takes a third argument that determines the enclosing scope. If variables are not found in the environment parameter, then `eval` will search in the enclosing scope parameter.
+
+Consider the functions `f` and `g` defined below:
+```{r}
+f <- function(expr, data, y) eval(expr, data)
+g <- function(expr, data, y) eval(expr, data, rlang::caller_env())
+```
+
+They both evaluate an expression in a context defined by `data` but `f` then uses the function call scope as the enclosing scope while `g` uses the calling scope as the enclosing environment in the call to `eval`. Both take the parameter `y` but if we use `y` in the expression we pass to the functions, only `f` will use the parameter; `g`, on the other hand, will look for `y` in the calling scope if it is not in `data`:
+
+```{r}
+df <- data.frame(x = 1:4)
+y <- 1:4
+f(quote(x + y), df, y = 5:8) == 1:4 + 5:8
+g(quote(x + y), df, y = 5:8) == 1:4 + 1:4
+```
+
+The combination of quoted expressions and non-standard evaluation is indubitably a very powerful tool for creating domain-specific languages, but it is not without its pitfalls, of which there are mainly two: complications about who is responsible for quoting expressions and complications about stringing environments together correctly.
+
+Let us consider these in turn. Some code must be responsible for turning an expression into a quoted expression. The simplest solution to this is to make it up to the user to always quote expressions that must be quoted. This would be the solution in a function like this:
+
+```{r}
+f <- function(expr, data) eval(expr, data, rlang::caller_env())
+f(quote(u + v), data.frame(u = 1:4, v = 1:4))
+```
+
+It is, however, a bit cumbersome to explicitly quote every time you call such a function, and it goes against the spirit of domain-specific languages where we want to make new syntax to make it easer to write code. However, if we let the function quote the expression using substitute, as in this function
+
+```{r}
+fq <- function(expr, data) {
+  eval(substitute(expr), data, rlang::caller_env())
+}
+fq(u + v, data.frame(u = 1:4, v = 1:4))
+```
+
+then we potentially run into problems if we want to call this function from another function. We can try just calling `fq` with an expression:
+
+```{r}
+g <- function(expr) fq(expr, data.frame(u = 1:4, v = 1:4))
+g(u + v)
+```
+
+This doesn’t work because `expr` is now considered a promise that should be evaluated in the global scope, so inside `fq` we try to evaluate the expression, which we cannot do because `u` and `v` are not defined. We would be even worse off if we used an expression that we actually *can* evaluate, because it wouldn’t be obvious that we were evaluating it in the wrong scope and thus on the wrong data
+
+```{r}
+u <- v <- 5:8
+g(u + v)
+```
+
+We could try to get the expression quoted using `substitute` inside `g`:
+
+```{r}
+g <- function(expr) {
+  fq(substitute(expr), data.frame(u = 1:4, v = 1:4))
+}
+g(u + v)
+```
+
+This fails in a different way. The expression that we get inside `fq` when that function calls substitute is the expression the function was called with, which is `substitute(expr)`. So it evaluates `substitute(substitute(expr))` and get `expr`, not `u + v`. The same would happen if we used `quote`
+
+```{r}
+g <- function(expr) {
+  fq(quote(expr), data.frame(u = 1:4, v = 1:4))
+}
+g(u + v)
+```
+
+in this case because `quote(expr)` doesn’t substitute the function argument into `expr`.
+
+There isn’t any good way to resolve this problem. If you call a function that quotes an expression, you should give it a literal expression to quote. Such functions are essentially not useful for programming—they provide an interface to a user of your domain-specific language, but you cannot use them to implement the language by calling them from other functions.
+
+The solution is to have functions that expect expressions to be quoted, like the function `f` we wrote before `fq`, and use those when you call one function from another:
+
+```{r}
+g <- function(expr) {
+  f(substitute(expr), data.frame(u = 1:4, v = 1:4))
+}
+g(u + v)
+```
+
+If you want some functionality to be available for programming—i.e. calling a function from another function—and also as an operation in your language, then write one that expects expressions to be quoted and another that wraps it:
+
+```{r}
+f <- function(expr, data) eval(expr, data, rlang::caller_env())
+fq <- function(expr, data) f(substitute(expr), data)
+fq(u + v, data.frame(u = 1:4, v = 1:4))
+```
+
+This, however, brings us to the second pitfall—getting environments wired up correctly. Consider these two functions:
+
+```{r}
+g <- function(x, y, z) {
+  w <- x + y + z
+  f(quote(w + u + v), data.frame(u = 1:4, v = 1:4))
+}
+h <- function(x, y, z) {
+  w <- x + y + z
+  fq(w + u + v, data.frame(u = 1:4, v = 1:4))
+}
+```
+
+Function `g` explicitly quotes the expression `w + u + v` and calls `f`; `h` instead calls `fq` that takes care of the quoting for it. The first function works, the second does not:
+
+```{r}
+g(1:4, 1:4, 1:4) == (1:4 + 1:4 + 1:4) + 1:4 + 1:4
+h(1:4, 1:4, 1:4) == (1:4 + 1:4 + 1:4) + 1:4 + 1:4
+```
+
+This time, the problem is not quoting. Both functions attempt to evaluate the same expression, `w + u + v`, inside function `f`. The problem is that the variable `w` is only available to `f` when we call it from `g`. To see why, consider the environments in play. We do not define any nested functions, so all three functions, `f`, `fq`, `g`, and `h`, only have access to their local environment and the global environment. The expression that `f` gets as its argument, however, is not evaluated in `f`’s local environment; it is evaluated in its caller’s environment. When `f` is called directly from `g`, the caller environment is the local environment of the `g` call, where `w` is defined. When `f` is called from `h`, however, it is not called directly. Since `h` calls `fq` that then calls `f`, the caller of `f` in this case is `fq`. The variable `w` is defined in the local scope of `h` but this is not where `f` tries to evaluate the expression; `f` tries to evaluate the expression in the scope of `fq` where `w` is *not* defined.
+
+It is less obvious how to resolve this issue. It is, of course, possible to pass environments along with expressions as separate function parameters, but this quickly becomes cumbersome if we have to work with more than one expression. What we want, ideally, is to associate expressions with the environment in which we want to look up variables we do not explicitly override, for example by getting them from a data frame.
+
+Expressions do not carry along with them any environment, so we cannot get there directly. Formulas, however, do. Instead of using expressions, we can use one-sided formulas. Quoting would now involve making a formula out of an expression. If the formula is one-sided, we can get the expression as the second element in it, and the environment where the formula is defined is available using the `environment` function. We can rewrite the `f` and `fq` functions to be based on formulas:
+
+```{r}
+ff <- function(expr, data) {
+  eval(expr[[2]], data, environment(expr))
+}
+ffq <- function(expr, data) {
+  expr <- eval(substitute(~ expr))
+  environment(expr) <- rlang::caller_env()
+  ff(expr, data)
+}
+```
+
+With `ff` you need to explicitly create the formula—similar to how you had to explicitly quote expressions in `f`—and this automatically gives you the environment associated with the formula. With `ffq` we translate an expression into a formula using `substitute` and explicitly set its environment to the caller environment. We can now define `g` and `h` similar to before, except that `g` uses a formula instead of `quote`:
+
+```{r}
+g <- function(x, y, z) {
+  w <- x + y + z
+  ff(~ w + u + v, data.frame(u = 1:4, v = 1:4))
+}
+h <- function(x, y, z) {
+  w <- x + y + z
+  ffq(w + u + v, data.frame(u = 1:4, v = 1:4))
+}
+```
+
+This time, both functions will evaluate the expressions in the right scope:
+
+```{r}
+g(1:4, 1:4, 1:4) == (1:4 + 1:4 + 1:4) + 1:4 + 1:4
+h(1:4, 1:4, 1:4) == (1:4 + 1:4 + 1:4) + 1:4 + 1:4
+```
+
+Associating environments to expressions is the idea behind *quosures* from the `rlang` package. The word is a portmanteau created from quotes and closures—similar to how closures are functions with associated environments, quosures are quoted expressions with associated environments. Quosures are based on formulas, and we could use formulas as in the example we just saw, but the `rlang` package provide functionality that makes it much simpler to program domain-specific languages using quosures. 
+
 ## Quosures
 
+
 ## Quasi-quoting
+
+```{r}
+x <- y <- 1
+quote(2 * x + !!y)
+expr(2 * x + !!y)
+```
+
+
 
