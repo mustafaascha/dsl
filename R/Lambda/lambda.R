@@ -71,14 +71,14 @@ lst_to_list <- function(lst) {
 }
 library(magrittr)
 
-expressions <- function() list(expressions = NULL)
-add_expression_quo <- function(expressions, expr) {
-  expressions$expressions <- cons(rlang::enquo(expr), expressions$expressions)
-  expressions
+expressions <- function() list(ex = NULL)
+add_expression <- function(ex, expr) {
+  ex$ex <- cons(rlang::enquo(expr), ex$ex)
+  ex
 }
-make_functions_quo <- function(expressions, args) {
-  results <- vector("list", length = lst_length(expressions$expressions))
-  i <- 1; lst <- expressions$expressions
+make_functions <- function(ex, args) {
+  results <- vector("list", length = lst_length(ex$ex))
+  i <- 1; lst <- ex$ex
   while (!is.null(lst)) {
     results[[i]] <- rlang::new_function(args, rlang::UQE(lst$car), rlang::get_env(lst$car))
     i <- i + 1
@@ -87,56 +87,35 @@ make_functions_quo <- function(expressions, args) {
   rev(results)
 }
 
-make_line_function <- function(intercept) {
+make_line_expressions <- function(intercept) {
   expressions() %>% 
-    add_expression_quo(coef + intercept) %>%
-    add_expression_quo(2*coef + intercept) %>% 
-    add_expression_quo(3*coef + intercept) %>% 
-    add_expression_quo(4*coef + intercept) %>% 
-    make_functions_quo(alist(coef=)) 
+    add_expression(coef + intercept) %>%
+    add_expression(2*coef + intercept) %>% 
+    add_expression(3*coef + intercept) %>% 
+    add_expression(4*coef + intercept)
+}
+eval_line <- function(ex, coef) {
+  ex %>% make_functions(alist(coef=)) %>%
+    purrr::invoke_map(coef = coef) %>% unlist
 }
 
-make_line_function(0) %>% purrr::invoke_map(coef = 1) %>% unlist
-make_line_function(0) %>% purrr::invoke_map(coef = 2) %>% unlist
-make_line_function(1) %>% purrr::invoke_map(coef = 1) %>% unlist
+make_line_expressions(intercept = 0) %>% eval_line(coef = 1)
+make_line_expressions(intercept = 0) %>% eval_line(coef = 2)
+make_line_expressions(intercept = 1) %>% eval_line(coef = 1)
 
-make_functions_quote <- function(expressions, args) {
-  results <- vector("numeric", length = lst_length(expressions$expressions))
-  i <- 1; lst <- expressions$expressions
+add_expression <- function(ex, expr) {
+  ex$ex <- cons(substitute(expr), ex$ex)
+  ex
+}
+make_functions <- function(ex, args) {
+  results <- vector("list", length = lst_length(ex$ex))
+  i <- 1; lst <- ex$ex
   while (!is.null(lst)) {
-    results[i] <- rlang::new_function(expressions$args, lst$car, rlang::caller_env())
+    results[[i]] <- rlang::new_function(args, lst$car, rlang::caller_env())
     i <- i + 1
     lst <- lst$cdr
   }
-  results
+  rev(results)
 }
 
-
-eval_expressions <- function(expressions, ...) {
-  results <- vector("numeric", length = lst_length(expressions$functions))
-  i <- 1; lst <- expressions$functions
-  while (!is.null(lst)) {
-    results[i] <- lst$car(...)
-    i <- i + 1
-    lst <- lst$cdr
-  }
-  results
-}
-
-make_expressions <- function(z, adder) {
-  z <- 2
-  expressions(alist(x=,y=)) %>%
-    adder(x + y + z) %>%
-    adder(x * y * z)
-}
-ex_quo <- make_expressions(z = 2, add_expression_quo)
-ex_quo %>% eval_expressions(x = 4, y = 6)
-
-add_expression_quote <- function(expressions, expr) {
-  body <- substitute(expr)
-  f <- rlang::new_function(expressions$args, body, rlang::caller_env())
-  expressions$functions <- cons(f, expressions$functions)
-  expressions
-}
-ex_quote <- make_expressions(z = 2, add_expression_quote)
-ex_quote %>% eval_expressions(x = 4, y = 6)
+make_line_expressions(intercept = 0) %>% eval_line(coef = 1)
