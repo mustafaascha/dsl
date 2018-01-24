@@ -433,14 +433,280 @@ Associating environments to expressions is the idea behind *quosures* from the `
 
 ## Quosures
 
+The `rlang` package provided functions to replace `quote` and `substitute` that create quosures instead of expressions. To create a quosure from an expression, you use `quo`:
+
+```{r}
+q <- rlang::quo(2 * x)
+q
+```
+
+Inside a function call, the quosure analogue to `substitute` is `enquo`:
+
+```{r}
+f <- function(expr) rlang::enquo(expr)
+q <- f(2 * x)
+q
+```
+
+In both of these examples, the scope associated with the quosure is the global environment because this is the level at which the expression is written.
+
+A quosure is just a special type of formula, so we can access one as we did in the previous section to get the environment and expression
+
+```{r}
+q[[2]]
+environment(q)
+```
+
+but `rlang` provides functions for working with quosures that make the intent of our code clearer. To get the expression out of a quosure, we use the function `UQE`—unquote expression:
+
+```{r}
+rlang::UQE(q)
+```
+
+I honestly think the name is a bit unfortunate since the *un*-quote function returns a quoted expression, but it does strip away the quosure-ness and gives us a raw expression. There is another unquote function, `UQ`, that *does* unquote an expression in the sense of evaluating it, but it has a different purpose that we get to in the next section.
+
+Getting the environment associated with a quosure can be done using `environment` as we saw above, but the `rlang` function for this is `get_env`:
+
+```{r}
+rlang::get_env(q)
+```
+
+With quosures you can no longer evaluate them with `eval`. A quosure is a formula, and the result of evaluating a formula is the formula itself.
+
+```{r}
+eval(q)
+```
+
+Instead, you need to use the function `eval_tidy`
+
+```{r}
+x <- 1
+rlang::eval_tidy(q)
+x <- 2
+rlang::eval_tidy(q)
+```
+
+The quosure is evaluated inside the environment it is associated with. We created this quosure, `q`, inside function `f`, but its environment is the global environment, so when we modify this, by changing `x`, it affects the result of evaluating `q`.
+
+If we create a quosure inside a local function scope, it will remember this context—just like a closure. For example, if we define function `f` as this
+
+```{r}
+f <- function(x, y) rlang::quo(x + y + z)
+```
+
+the quosure will know the function parameters `x` and `y` from when `f` is called, but will have to find `z` elsewhere. Consider the contrast between evaluating the quosure and the expression `x + y + z` directly:
+
+```{r}
+q <- f(1, 2)
+x <- y <- z <- 3
+rlang::eval_tidy(q) # 1 + 2 + 3
+x + y + z # 3 + 3 + 3
+```
+
+Just as `eval`, `eval_tidy` lets you provide a list, data frame, or environment with bindings from variables to values. When you do this, the values you provide will overrule the variables in the quosure’s environment—an effect known as *over-scoping*. Consider this:
+
+```{r}
+x <- 1:4
+y <- 1:4
+q <- quo(x+y)
+rlang::eval_tidy(q)
+rlang::eval_tidy(q, list(x = 5:8))
+```
+
+The quosure `q` is bound to the global environment, so when we evaluate it, `x` and `y` are both `1:4`. However, when we provide the second argument to `eval_tidy`, we can override the value of `x` to `5:8`. You will recognise this feature from `dplyr` where you have access to columns in data frames in arguments you provide to the functions there and these columns over rule any global variable that might otherwise have been used.
+
+This, of course, can also be used to override variables in a function call with function parameters. Consider these two functions:
+
+```{r}
+f <- function(expr,x) {
+  q <- rlang::enquo(expr)
+  rlang::eval_tidy(q)
+}
+g <- function(expr,x) {
+  q <- rlang::enquo(expr)
+  rlang::eval_tidy(q, environment())
+}
+f(x + y, x = 5:8)
+g(x + y, x = 5:8)
+```
+
+The function `f` simply evaluates the quosure in its scope, which doesn’t contain the function parameter `x`, while the function `g` over-scopes with the function environment, making the variable `x` refer to the function parameter rather than the global parameter.
+
+The expression you evaluate with `eval_tidy` doesn’t have to be a quosure. The function is equally happy to evaluate bare expressions, and then it behaves just like `eval`:
+
+```{r}
+rlang::eval_tidy(quote(x + y))
+```
+
+Just like `eval`, `eval_tidy` takes a third argument that will behave as the enclosing scope.  This is used for bare expressions—those created with `quote`
+
+```{r}
+rlang::eval_tidy(quote(xx), env = list2env(list(xx = 5:8)))
+```
+
+but not with quosures
+
+```{r}
+rlang::eval_tidy(quo(xx), env = list2env(list(xx = 5:8)))
+```
+
+If you want to create a closure with over-scoping, i.e. you want to create a function that evaluates a quosure where it first finds local variables and then look in the quosure’s environment, you cannot directly call `eval_tidy` when creating the function. This would ask R to attempt to evaluate the closure, but you do not yet have the variables you need—those are provided when you call the closure. Instead, you can separate the bare expression and the environment of the quosure using `UQE` and `get_env`, respectively. Consider the function `make_funciton` below:
+
+```{r}
+make_function <- function(args, body) {
+  body <- rlang::enquo(body)
+  rlang::new_function(args, rlang::UQE(body), rlang::get_env(body))
+}
+f <- function(z) make_function(alist(x=, y=), x + y + z)
+g <- f(z = 1:4)
+g
+g(x = 1:4, y = 1:4)
+```
+
+Here, `make_function` takes two arguments, a pair list of arguments and an expression for the body of a function. It is a little more primitive than the lambda expressions we wrote in the previous chapter, but it is essentially doing the same thing, in this example I am just focusing on the closure we create rather than on language design issues. We translate the function body into a quosure, which guarantees that we have an environment associated with it. In the function we create using `new_function`, however, we strip the environment from the quosure to create the body of the new function, but we assign the function’s environment to be the quosure environment.
+
+In the function `f` we have a local scope that knows the value of `z` and in this scope we create a new function. The quosure we get from this is associated with the local `f` scope, so it also knows about `z`. When call `g` we provide variables `x` and `y`, but the `z` value is taken from the local scope of `f`.
+
+Of course, if called directly, there isn’t any difference between using the caller’s environment or the quosure’s environment 
+
+```{r}
+make_function_quo <- function(args, body) {
+  body <- rlang::enquo(body)
+  rlang::new_function(args, rlang::UQE(body), rlang::get_env(body))
+}
+make_function_quote <- function(args, body) {
+  body <- substitute(body)
+  rlang::new_function(args, body, rlang::caller_env())
+}
+g <- make_function_quo(alist(x=, y=), x + y)
+h <- make_function_quote(alist(x=, y=), x + y)
+g(x = 1:4, y = 1:4)
+h(x = 1:4, y = 1:4)
+```
+
+However, consider a more involved example, where we collect expressions in a list and have a function for translating all the expressions into functions that we can then apply over values using the `invoke_map` function from the `purrr` package. We can construct the expressions like this, using the linked lists structure we have previously used:
+
+```{r, echo=FALSE}
+cons <- function(elm, lst) list(car=elm, cdr=lst)
+lst_length <- function(lst) {
+  len <- 0
+  while (!is.null(lst)) {
+    lst <- lst$cdr
+    len <- len + 1
+  }
+  len
+}
+lst_to_list <- function(lst) {
+  v <- vector(mode = "list", length = lst_length(lst))
+  index <- 1
+  while (!is.null(lst)) {
+    v[[index]] <- lst$car
+    lst <- lst$cdr
+    index <- index + 1
+  }
+  v
+}
+```
+
+```{r}
+expressions <- function() list(ex = NULL)
+add_expression <- function(ex, expr) {
+  ex$ex <- cons(rlang::enquo(expr), ex$ex)
+  ex
+}
+```
+
+Translating the expressions into functions is straightforward, we just need to reverse the resulting list if we want the functions in the order we add them, since we prepend expressions when we use the linked lists:
+
+```{r}
+make_functions <- function(ex, args) {
+  results <- vector("list", length = lst_length(ex$ex))
+  i <- 1; lst <- ex$ex
+  while (!is.null(lst)) {
+    results[[i]] <- 
+      rlang::new_function(args, rlang::UQE(lst$car), 
+                           rlang::get_env(lst$car))
+    i <- i + 1
+    lst <- lst$cdr
+  }
+  rev(results)
+}
+```
+
+With this small domain-specific language for collecting expressions, we can write a function that creates expressions for computing y-coordinates of a line given an intercept:
+
+```{r}
+make_line_expressions <- function(intercept) {
+  expressions() %>% 
+    add_expression(coef + intercept) %>%
+    add_expression(2*coef + intercept) %>% 
+    add_expression(3*coef + intercept) %>% 
+    add_expression(4*coef + intercept)
+}
+```
+
+The expressions know the intercept when we call `make_line_expressions`—that is the intent at least—but the coefficient should be added later in a function call. We can create the functions for the expressions using another function:
+
+```{r}
+eval_line <- function(ex, coef) {
+  ex %>% make_functions(alist(coef=)) %>%
+    purrr::invoke_map(coef = coef) %>% unlist
+}
+```
+
+We can now pipe these functions together to get points on a line:
+
+```{r}
+make_line_expressions(intercept = 0) %>% eval_line(coef = 1)
+make_line_expressions(intercept = 0) %>% eval_line(coef = 2)
+make_line_expressions(intercept = 1) %>% eval_line(coef = 1)
+```
+
+All works as intended here, but what would happen if we used quotes instead? It is simple to write the corresponding functions:
+
+```{r}
+add_expression <- function(ex, expr) {
+  ex$ex <- cons(substitute(expr), ex$ex)
+  ex
+}
+make_functions <- function(ex, args) {
+  results <- vector("list", length = lst_length(ex$ex))
+  i <- 1; lst <- ex$ex
+  while (!is.null(lst)) {
+    results[[i]] <- rlang::new_function(args, lst$car, rlang::caller_env())
+    i <- i + 1
+    lst <- lst$cdr
+  }
+  rev(results)
+}
+```
+
+We will get an error if we try to use them as before, however:
+
+```{r}
+make_line_expressions(intercept = 0) %>% eval_line(coef = 1)
+```
+
+The reason for this is easy to see once we consider which environments contain information about the intercept. This variable lives in the scope of calls to `make_line_expressions`, but when we create the functions we do so by calling `make_functions` from inside `eval_line`. The functions are created with `eval_line` local environments as their closures, and `intercept` is not found there.
+
+In general, it is safer to use quosures than bare expressions for non-standard evaluation exactly because they carry their environment along with them, alleviating many of the problems we otherwise have with keeping track of which environment to evaluate expressions in.
 
 ## Quasi-quoting
 
 ```{r}
 x <- y <- 1
 quote(2 * x + !!y)
-expr(2 * x + !!y)
+rlang::expr(2 * x + !!y)
+rlang::quo(2 * x + !!y)
 ```
 
+```{r}
+x <- y <- 2
+rlang::expr(!!x + y)
+rlang::expr(!!x & y)
+```
 
+```{r}
+rlang::expr(UQ(x) + y)
+```
 

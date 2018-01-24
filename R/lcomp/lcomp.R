@@ -104,4 +104,3 @@ zip <- function(x, y) {
   lc(c(x,y), x = x, y = y) %>% { do.call(rbind,.) }
 }
 zip(1:4,1:4)
-
