@@ -691,7 +691,89 @@ The reason for this is easy to see once we consider which environments contain i
 
 In general, it is safer to use quosures than bare expressions for non-standard evaluation exactly because they carry their environment along with them, alleviating many of the problems we otherwise have with keeping track of which environment to evaluate expressions in.
 
+A final thing I want to mention before we move on to the next topic is the function `quos`. This function works as `quo` but for a sequence of arguments that are returned as a list of quosures.
+
+```{r}
+rlang::quos(x, y, x+y)
+```
+
+The primary use of `quos` is to translate the three-dots argument into a list of quosures:
+
+```{r}
+f <- function(...) rlang::quos(...)
+f(x, y, z)
+```
+
 ## Quasi-quoting
+
+The final topic of this chapter involves *quasi-quoting*, which simply means that we create quoted expression where we do not quote *everything* but evaluate some parts of expressions. When we directly call functions that do non-standard evaluation, we can usually provide expressions exactly as we want them, but as soon as we start using such non-standard evaluation functions in programs where we call them from other functions, we need some flexibility in how we construct expressions. We can do this with meta-programming where we modify `call` objects, but a better approach is implemented in the `rlang` package, the so-called *quosi-quoting*.
+
+Consider a simple, but not unrealistic, example. We have a data frame and we want to filter away rows where a given column has missing data. We can do this using `dplyr`’s `filter` function like this:
+
+```{r}
+df <- tibble::tribble(
+  ~x, ~y,
+   1,  1,
+  NA,  2,
+   3,  3,
+   4, NA,
+   5,  5,
+  NA,  6,
+   7, NA
+)
+df %>% dplyr::filter(!is.na(x))
+df %>% dplyr::filter(!is.na(y))
+```
+
+Here, we are using the same code for two different variables. It is very simple code so we probably wouldn’t write a function to avoid the duplication, but for more complicated pipelines we would—so for the sake of argument let us just imagine that we want to replace the pipeline with a function. We could attempt to write it like this:
+
+```{r}
+filter_on_na <- function(df, column) {
+  column <- substitute(column)
+  df %>% dplyr::filter(!is.na(column))
+}
+df %>% filter_on_na(x)
+```
+
+We use `substitute` to translate the column name into a symbol and then apply the `filter` pipeline. It doesn’t work, of course
+
+```{r}
+df %>% filter_on_na(x)
+```
+
+and the reason is simply that `filter` does non-standard evaluation as well and translate the predicate `!is.na(column)` into this exact expression. So it needs to know the variable `column`. Now, since `filter` evaluates its argument as a quosure, it *can* find the variable `column`, but it finds that this is a symbol—it is in this case the symbol `x`—but that is not what we want it to see. We want `filter` to see the column `x`, but that is not how `filter` works.
+
+What we want to do is to substitute the symbol held in the variable `column` into the expression/quosure that `filter` sees. We can do this with the “bang-bang” operator `!!`:
+
+```{r}
+filter_on_na <- function(df, column) {
+  column <- rlang::enexpr(column)
+  df %>% dplyr::filter(!is.na(!!column))
+}
+df %>% filter_on_na(x)
+df %>% filter_on_na(y)
+```
+
+This operator unquotes the following expression, evaluate it, and put the result into the quoted expression that `filter` sees. So the value of `column`, rather than the symbol `column`, gets insert into `!is.na(!!column)``.
+
+You will have noticed that I used a different function to create the quoted column name. In the `rlang` package there are two functions that behave like `quote` and `substitute` in that they create bare expressions but they allow quasi-quoting with the bang-bang operator, something `substitute` and `quote` do not. Consider the functions `f` and `g` defined like this:
+
+```{r}
+f <- function(x) substitute(x)
+g <- function(x) rlang::enexpr(x)
+```
+
+Called directly, both will return the expression we give as the parameter `x`, but consider the case where we call them from another function, `h`, where we want to substitute its parameter for the parameter `x`:
+
+```{r}
+h <- function(func, var) func(!!var)
+h(f, quote(x))
+h(g, quote(x))
+```
+
+In `f`, where we use `substitute`, we get the expression `!!var` back, but in function `g`, where we use `enexpr`, we get the substitution done and get the desired result `x`.
+
+The function `enexpr` works like `enquo` to translate function parameters into expressions, but translate them into bare expressions rather than quosures. The analogue to `quo`, that takes an expression directly and create a quosure, we have `expr`, which create a bare expression—like `quote`—but allows quasi-quotation.
 
 ```{r}
 x <- y <- 1
@@ -700,13 +782,22 @@ rlang::expr(2 * x + !!y)
 rlang::quo(2 * x + !!y)
 ```
 
+You have to be a little bit careful when using the bang-bang operator. It is built from the negation operator, `!`, which has a very low precedence. The only operators with lower precedence are the logical operators and assignments. This mean that if you try to unquote `x` in the expression `x + y`, you will in fact be unquoting the entire expression if you simply write `!!x + y`. You only get `!!` bound to only `x` if the operator you use in the expression is a logical operator.
+
 ```{r}
 x <- y <- 2
 rlang::expr(!!x + y)
 rlang::expr(!!x & y)
 ```
 
+You can get around this problem using parentheses, or you can use the function-variant of unquoting, `UQ`:
+
 ```{r}
 rlang::expr(UQ(x) + y)
 ```
 
+When we translate a function argument into an expression, with `enexpr`, or a quosure, with `enquo`, the bang-bang operator or the `UQ` function will substitute the results of expressions into the expressions/quosures we create, which is why the second `filter_on_na` function worked.
+
+
+
+*FIXME: splicing with !!! / UQS()*
