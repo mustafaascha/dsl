@@ -1,8 +1,10 @@
 pdf_book/*.txt
 pdf_book/book.pdf
+pdf_book/book.docx
 pdf_book/figures
 pdf_book/cache/*
 book.pdf
+book.docx
 
 ebook/*.txt
 ebook/book.epub

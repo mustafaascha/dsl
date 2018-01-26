@@ -33,6 +33,10 @@ book.epub:  $(SOURCE_CHAPTERS) Makefile ebook/Makefile
 book.mobi: book.epub
 	./kindlegen book.epub -o book.mobi
 
+book.docx: $(SOURCE_CHAPTERS) Makefile pdf_book/Makefile templates/latex-template.tex
+	(cd pdf_book && make book.docx CHAPTERS="$(CHAPTERS)")
+	cp pdf_book/book.docx book.docx
+
 all: book.pdf book.epub book.mobi
 
 clean:
