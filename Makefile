@@ -20,7 +20,7 @@ CHAPTERS := 000_header.txt \
 
 SOURCE_CHAPTERS := $(foreach chapter,$(CHAPTERS),chapters/$(chapter))
 
-all: book.pdf book.epub book.mobi
+all: book.pdf book.epub
 
 book.pdf: $(SOURCE_CHAPTERS) Makefile pdf_book/Makefile templates/latex-template.tex
 	(cd pdf_book && make CHAPTERS="$(CHAPTERS)")
@@ -30,14 +30,12 @@ book.epub:  $(SOURCE_CHAPTERS) Makefile ebook/Makefile
 	(cd ebook && make CHAPTERS="$(CHAPTERS)")
 	cp ebook/book.epub book.epub
 
-book.mobi: book.epub
-	./kindlegen book.epub -o book.mobi
+#book.mobi: book.epub
+#	./kindlegen book.epub -o book.mobi
 
 book.docx: $(SOURCE_CHAPTERS) Makefile pdf_book/Makefile templates/latex-template.tex
 	(cd pdf_book && make book.docx CHAPTERS="$(CHAPTERS)")
 	cp pdf_book/book.docx book.docx
 
-all: book.pdf book.epub book.mobi
-
 clean:
-	rm book.pdf book.epub book.mobi
+	rm book.pdf book.epub book.docx
