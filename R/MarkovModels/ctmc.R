@@ -140,7 +140,3 @@ q(a = 2, b = 4)
 library(expm)
 transition_probabilities <- function(Q, t) expm(Q * t)
 
-f <- function(expr) rlang::enquo(expr)
-g <- function(expr) f(rlang::enquo(expr))
-f(x + y)
-g(x + y)

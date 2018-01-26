@@ -16,9 +16,10 @@ book.epub: $(EPUB_CHAPTERS) Makefile ../Makefile
 	$(PANDOC) $(PANDOC_EPUB_OPTS) -o $@ $(EPUB_CHAPTERS)
 
 
-%.md: %.Rmd
+%.txt: %.Rmd
 	../runknitr.sh $<
+	mv `basename $@ .txt`.md $@
 
-%.Rmd :: ../chapters/%.md
+%.Rmd :: ../chapters/%.txt
 	cat ../chapters/000_knitr_header.Rmd | gpp -DEPUB > $@
 	cat $< | gpp -DEPUB >> $@

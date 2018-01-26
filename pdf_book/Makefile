@@ -17,9 +17,10 @@ PDF_CHAPTERS := $(foreach chapter,$(CHAPTERS),$(chapter))
 book.pdf: $(PDF_CHAPTERS) Makefile ../Makefile ../templates/latex-template.tex
 	$(PANDOC) $(PANDOC_PDF_OPTS) -o $@ $(PDF_CHAPTERS)
 
-%.md: %.Rmd
+%.txt: %.Rmd
 	../runknitr.sh $<
+	mv `basename $@ .txt`.md $@
 
-%.Rmd :: ../chapters/%.md
+%.Rmd :: ../chapters/%.txt
 	cat ../chapters/000_knitr_header.Rmd | gpp -DPDF > $@
 	cat $< | gpp -DPDF >> $@

@@ -1,21 +1,21 @@
 
-CHAPTERS := 000_header.md \
-			Introduction.md \
+CHAPTERS := 000_header.txt \
+			Introduction.txt \
 			\
-			Matrix_expressions.md \
-			Components_of_a_language.md \
+			Matrix_expressions.txt \
+			Components_of_a_language.txt \
 			\
-			Functions_expressions_operators.md \
-			Parsing_and_manipulating_expressions.md \
-			Lambda.md \
+			Functions_expressions_operators.txt \
+			Parsing_and_manipulating_expressions.txt \
+			Lambda.txt \
 			\
-			Environments_and_expressions.md \
-			Tidy_eval.md \
-			List_comprehension.md \
-			CTMCs.md \
-			Pattern_matching.md \
+			Environments_and_expressions.txt \
+			Tidy_eval.txt \
+			List_comprehension.txt \
+			CTMCs.txt \
+			Pattern_matching.txt \
 			\
-			xx_conclusions.md
+			xx_conclusions.txt
 
 
 SOURCE_CHAPTERS := $(foreach chapter,$(CHAPTERS),chapters/$(chapter))
