@@ -1,4 +1,4 @@
-# Tidy evaluation
+# Tidy evaluation {#sec:tidy-eval}
 
 The so-called [“tidyverse”](https://www.tidyverse.org) refers to a number of R packages designed to work well together and based on similar designs that can all be considered domain-specific languages in themselves. These packages include `dplyr`, `tidyr` and `ggplot2` and mainly consist of functions that do non-standard evaluation. The way they manage non-standard evaluation is consistent among the packages and based on what they call “tidy evaluation”, which essentially relies on two features implemented in the `rlang` package: quosures and quasi-quotation.
 
