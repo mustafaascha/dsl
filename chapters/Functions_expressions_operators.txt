@@ -3,15 +3,15 @@
 
 Everything you do in R, you do with functions, so if you want to implement a domain specific language, you must do so by writing functions. All the actions your new DSL should support, you must implement using functions, and should you want a special syntax for your DSL, you will have to write functions for parsing this syntax. When implementing an embedded DSL, as we shall see, much of the parsing can be outsourced to R’s parser. The price for this is some restrictions to the syntax for the DSL—the DSL must be syntactically valid R code. We cannot construct arbitrary syntaxes for embedded languages, but by using operator overloading or meta-programming, and by defining new infix operators, we do have some flexibility in designing our DSLs.
 
-In the previous two chapters we have already seen examples of how to use both operator overloading and meta-programming to treat R expressions as expressions in an embedded language. The purpose of this chapter is to go into more detail of the operator option while the next chapter will cover the option of explicitly manipulating expressions through meta-programming.
+In the previous two chapters, we have already seen examples of how to use both operator overloading and meta-programming to treat R expressions as expressions in an embedded language. The purpose of this chapter is to go into more detail of the operator option while the next chapter will cover the possibility of explicitly manipulating expressions through meta-programming.
 
 ## The S3 object-oriented programming system
 
-You could write a whole book about the object-oriented programming systems supported by R—I know, because I have written such a book—but for the purpose of operator overloading and implementing DSL parsers, we only need a few of the object-orientation features and this section will give you a quick introduction to those. We will only use the simplest object-orientation system in this book, the S3 system.If you are already familiar with the S3 system, feel free to skip ahead to the next section.
+You could write a whole book about the object-oriented programming systems supported by R—I know because I have written such a book—but for operator overloading and implementing DSL parsers, we only need a few of the object-orientation features, and this section will give you a quick introduction to those. We will just use the simplest object-orientation system in this book, the S3 system.If you are already familiar with the S3 system, feel free to skip ahead to the next section.
 
 ### Objects and classes
 
-The S3 system has a very simple approach to object-orientation. It lets us associate classes with any object (except for `NULL`), but classes are just text strings and there is no structure to them. You can get the classes associated to any object by calling the function `class`:
+The S3 system has a straightforward approach to object-orientation. It lets us associate classes with any object (except for `NULL`), but classes are just text strings, and there is no structure to them. You can get the classes associated with an object by calling the function `class`:
 
 ```{r}
 class(4)
@@ -40,7 +40,7 @@ class(2) <- "character"
 class("foo") <- "numeric"
 ```
 
-you would would get errors. Still, you are generally free to modify the class of objects at any time you want. The class associated with an object is just an object attribute containing one or more class names—in the cases above, all the objects have a single class, but the matrix expressions we created [Chapter @sec:matrix-expressions], for example, had multiple classes. Vectors of class names are used both for multiple inheritance and single inheritance, and there is not formal class structure at all. You can set the classes any way you want. The class attribute is just a vector of strings that are interpreted as class names.
+you would get errors. Still, you are free to modify the class of objects at any time you want. The class associated with an object is just an object attribute containing one or more class names—in the cases above, all the objects have a single class, but the matrix expressions we created [Chapter @sec:matrix-expressions], for example, had multiple classes. Vectors of class names are used both for multiple inheritance and single inheritance, and there is no formal class structure at all. You can set the classes any way you want. The class attribute is just a vector of strings that are interpreted as class names.
 
 The only thing that makes the class attribute interesting, compared to any other attributes you could associate with objects, is how it is used for dispatching generic functions. When you call a generic function, the actual function that gets called depends on the class of one of its arguments, usually the first (and by default the first).
 
@@ -86,13 +86,13 @@ and now this function will be called if `x` is numeric
 foo(1, 2, 3)
 ```
 
-A quick comment here, before we continue exploring how dispatching is done on generic functions for user-defined classes: when we used `UseMethod` in the definition of `foo` we called it with the name “foo”. This is why it looks for that name when it searches for implementations of the generic function. We could have asked it to search for other functions, the name we give the generic function when we defined `foo` is not what determines what we search for when we call the function—that is determined by the name we give `UseMethod`. Further, we have seen it dispatch on the first argument of `foo`, but this is just a default. We *could* give `UseMethod` another object to dispatch on.
+A quick comment here, before we continue exploring how dispatching is done on generic functions for user-defined classes: when we used `UseMethod` in the definition of `foo` we called it with the name “foo”. This is why it looks for that name when it searches for implementations of the generic function. We could have asked it to search for other functions, the name we gave the generic function when we defined `foo` is not what determines what we search for when we call the function—that is determined by the name we give `UseMethod`. Further, we have seen it dispatches on the first argument of `foo`, but this is just a default. We *could* give `UseMethod` another object to dispatch on.
 
 ```{r}
 bar <- function(x, y, z) UseMethod("foo", y)
 ```
 
-I do not recommend doing this—it goes against the conventions used in R—but it is possible and with this function we would dispatch on the `y` argument (and search for the generic function `foo`, not `bar`).
+I do not recommend doing this—it goes against the conventions used in R—but it is possible, and with this function, we would dispatch on the `y` argument (and search for the generic function `foo`, not `bar`).
 
 ```{r}
 foo("foo",2,3)
@@ -109,7 +109,7 @@ x <- 1
 foo(x, 2, 3)
 ```
 
-Here, we have created the object `x` which is numeric, so when we call `foo`, we match the numeric function. But we can chance the class of `x` and see what happens.
+Here, we have created the object `x` which is numeric, so when we call `foo`, we match the numeric function. But we can change the class of `x` and see what happens.
 
 ```{r}
 class(x) <- c("a", "b", "c")
@@ -135,7 +135,7 @@ class(x) <- c("c", "b", "a")
 foo(x, 2, 3)
 ```
 
-When calling `UseMethod` we will find and call the first matching function. The related `NextMethod` function can be invoked to find and call the next function in the chain of classes. To see it in action, we can redefine the three “a”, “b”, and “c”, `foo` implementations and make them call the next function in line.
+When calling `UseMethod`, we will find and call the first matching function. The related `NextMethod` function can be invoked to find and call the next function in the chain of classes. To see it in action, we can redefine the three “a”, “b”, and “c”, `foo` implementations and make them call the next function in line.
 
 ```{r}
 foo.a <- function(x, y, z) {
@@ -152,7 +152,7 @@ foo.c <- function(x, y, z) {
 }
 ```
 
-They will all call the next function in line, and since we have a default implementation of `foo`, the last in line will call that one. The order in which they are called depend entirely on the order of `x`’s classes.
+They will all call the next function in line, and since we have a default implementation of `foo`, the last in line will call that one. The order in which the functions are called depends entirely on the order of `x`’s classes.
 
 ```{r}
 class(x) <- c("a", "b", "c")
@@ -165,11 +165,11 @@ class(x) <- c("c", "b", "a")
 foo(x, 2, 3)
 ```
 
-This generic dispatch mechanism is obviously extremely flexible, so it can require some discipline to ensure a robust object-oriented design. For the purpose of implementing domain-specific languages, though, we are just interested in how we can use it to add operators to our language.
+This generic dispatch mechanism is obviously extremely flexible, so it can require some discipline to ensure a robust object-oriented design. To implement domain-specific languages, though, we are just interested in how we can use it to add operators to our language.
 
 ### Operator overloading
 
-Most operators, with exceptions such as assignments and slot and component access (`@` and `$`), behave as generic functions and can be overloaded. The mechanism for overloading operators is not different from the mechanism for implementing new version of generic functions—if you name a function the right way, it will be invoked when a generic function is called.
+Most operators, with exceptions such as arrow assignments (`<-` and `->`) and slot and component access (`@` and `$`), behave as generic functions and can be overloaded. The mechanism for overloading operators is not different from the mechanism for implementing a new version of a generic function—if you name a function the right way, it will be invoked when a generic function is called.
 
 For example, to define addition on “a” objects, we need to define the `+.a`, which we could do like this:
 
@@ -190,11 +190,11 @@ Here, we just print some output and then invoke the underlying numeric addition�
 }
 ```
 
-This is an infinite recursion and not what you want.
+This function causes an infinite recursion and not what you want.
 
-You overload operators exactly like you would define specialisations of generic functions, but there *are* a few differences between the two and how they dispatch. With normal generic functions, you would dispatch based on the first argument. With operators, there are a few heuristics that are there to make sure that the same function is called regardless of the order of the operands. You could easily imagine the pain it would be to debug programs where, switching the order of the operands in addition, would call completely different functions. That doesn’t happen in R, because operations are not *exactly* the same as other generic functions.
+You overload operators in the same way as you would define specialisations of generic functions, but there *are* a few differences between the two and how they dispatch. With standard generic functions, you would dispatch based on the first argument. With operators, there are a few heuristics that are there to make sure that the same function is called regardless of the order of the operands. You could easily imagine the pain it would be to debug programs where, switching the order of the operands, also, would call entirely different functions. That doesn’t happen in R because operations are not *exactly* the same as other generic functions.
 
-If we have defined `+.a` and we try to add a number to `x`, then we can do that in either order, and it will be the `+.a` function that will be called.
+If we have defined `+.a`, and we try to add a number to `x`, then we can do that in either order, and it will be the `+.a` function that is called.
 
 ```{r}
 x + 3
@@ -223,16 +223,16 @@ x + y
 y + x
 ```
 
-If both “a” and “b” have their own version of addition, then we need a way to resolve which version `x+y` and `y+x` should call. Here, the first operand takes precedence, so it determines which function is called—and you get a well deserved warning for getting up to such shenanigans.
+If both “a” and “b” have their own version of addition, then we need a way to resolve which version `x+y` and `y+x` should call. Here, the first operand takes precedence, so it determines which function is called—and you get a well-deserved warning for getting up to such shenanigans.
 
-You *might* be able to think up some other rules for how you would want such situations to be resolved. For example, you could say that the most abstract method should be called, so if both `x` and `y` were of class “b” but only `x` was also of class “a”, then we should call `+.b`.
+You *might* be able to think up some other rules for how you would want such situations to be resolved. For example, you could say that the most abstract method should be called, so if both `x` and `y` were of class “b”, but only `x` was also of class “a”, then we should call `+.b`.
 
 ```r
 class(x) <- c("a","b")
 class(y) <- "b"
 ```
 
-Unfortunately, you cannot make such rules in the S3 system. It is possible with the S4 system, where you can dispatch generic functions based on multiple arguments, but that goes beyond the scope of this book. We will simply make sure to avoid situations where we have to add different classes of objects that define the same operators—and by constructing grammars appropriately, this is not a problem.
+Unfortunately, you cannot make such rules in the S3 system. It is possible with the S4 system, where you can dispatch generic functions based on multiple arguments, but that goes beyond the scope of this book. We will just make sure to avoid situations where we have to add different classes of objects that define the same operators—and by constructing grammars appropriately, this is not a problem.
 
 Notice, though, that the combination of multiple classes and `NextMethod` still works as before. We do not have a good method, in the S3 system, to dispatch based on multiple arguments, but we can use `NextMethod` to invoke several methods as we evaluate an operator. If we invoke `+.a` on object `x`, which now has classes “a” and “b”, the call to `NextMethod` in the implementation of that function will invoke `+.b` before *that* function invokes the numeric addition.
 
@@ -242,7 +242,7 @@ x + 2
 x + y
 ```
 
-R has unary operators as well as binary operators. The negation operator, `!`, only exists in a unary operator, and you can specialise it for a given class by defining a function that takes as single argument.
+R has unary operators as well as binary operators. The negation operator, `!`, only exists in a unary operator, and you can specialise it for a given class by defining a function that takes a single argument.
 
 ```{r}
 `!.a` <- function(x) {
@@ -252,7 +252,7 @@ R has unary operators as well as binary operators. The negation operator, `!`, o
 !x
 ```
 
-For the `-` and `+` operators, though, we have the same symbol used for both unary and binary operators. Here, we have to use the same function for both—since the only way we identify operator functions is through their name and that would be the same for the unary and binary operators. The way we can determine if the function is called as part of a unary or binary operator is to test if the second argument is missing. If it is, we have a unary operator, if it isn’t, it is binary.
+For the `-` and `+` operators, though, we have the same symbol used for both unary and binary operators. Here, we have to use the same function for both—since the only way we identify operator functions are through their name, and that would be the same for the unary and binary operators. The way we can determine if the function is called as part of a unary or binary operator is to test if the second argument is missing. If it is, we have a unary operator; if it isn’t, it is binary.
 
 ```{r}
 `+.a` <- function(e1, e2) {
@@ -274,7 +274,7 @@ class(x) <- "a"
 
 There is another way you can overload operators based on their operands’ class: group generics. Group generics, as the name hints, groups several operators. They provide a way for us to define a single function that handles all operators of a given type. For arithmetic and logical operators, "+", "-", "*", "/", "^", "%%", “%/%”, "&", "|", “!”, "==", "!=", "<", "<=", ">=", and “>”, the relevant group generic is `Ops`.
 
-If we define `Ops.c`, then we define function that will be called for all of these operators when used on an element of class “c”.
+If we define `Ops.c`, then we define a function that will be called for all of these operators when used on an element of class “c”.
 
 ```{r}
 Ops.c <- function(e1, e2) {
@@ -289,9 +289,9 @@ z + 1
 z ^ 3
 ```
 
-The “magical” variable `.Generic` contains the name of the operator that is actually called, and calling `NextMethod` will dispatch to the relevant next implementation of the operator.
+The “magical” variable `.Generic` contains the name of the operator that is called, and calling `NextMethod` will dispatch to the relevant next implementation of the operator.
 
-If you implement both the `Ops` group generic *and* concrete implementations of some individual operator generics, then the latter takes precedence. If, for example, we have an object of class “a” *and* “c”, where we have defined addition for class “a” and have the group generic for “c”, the addition will invoke the `+.a` function and all other operators will invoke the `Ops.c` function.
+If you implement both the `Ops` group generic *and* concrete implementations of some individual operator generics, then the latter takes precedence. If, for example, we have an object of class “a” *and* “c”, where we have defined addition for class “a” and have the group generic for “c”, the addition will invoke the `+.a` function. All other operators will invoke the `Ops.c` function.
 
 ```{r}
 class(z) <- c("a", "c")
@@ -299,11 +299,11 @@ class(z) <- c("a", "c")
 2 * z
 ```
 
-With `Ops` you have a method for catching all operators that you do not explicitly write specialised generics for.
+With `Ops` you have a method for catching all operators for which you do not explicitly write specialised generics.
 
 ## Precedence and evaluation order
 
-As soon as we start working with operators, their precedence become important. The syntax for normal function calls makes the evaluation order relatively clear—with nested function calls we have inner and outer functions in an expression, and while that does not give us guarantees about which order parameters to a function will be evaluated in, we do know that arguments to a function will be evaluated before the function itself.[^lazy-eval] With operators, the syntax does not tell us in which order functions will be called. To know that, we need to know the precedence rules.
+As soon as we start working with operators, their precedence becomes important. The syntax for normal function calls makes the evaluation order relatively clear—with nested function-calls we have inner and outer functions in an expression. While that does not give us guarantees about which order parameters to a function will be evaluated in, we do know that arguments to a function will be evaluated before the function itself is evaluated.[^lazy-eval] With operators, the syntax does not tell us in which order functions will be called. To know that, we need to know the precedence rules.
 
 Precedence rules tell us the order in which operator functions get called by ordering the operators from highest to lowest precedence and by specifying if operators are evaluated from left to right or from right to left. In an expression such as
 
@@ -317,7 +317,7 @@ we know that the multiplication, `y * z`, is evaluated before the addition, so t
 x + (y * z)
 ```
 
-because multiplication has higher precedence than addition. With operators at the same level of precedence we might be less aware of the order, but for those, the left-to-right or right-to-left order is also guaranteed by precedence rules. Of the operators you can overload, only the exponentiation operator evaluates right-to-left while all the others evaluate left-to-right, so
+because multiplication has higher precedence than addition. With operators at the same level of precedence, we might be less aware of the order, but for those, the left-to-right or right-to-left order is also guaranteed by precedence rules. Of the operators you can overload, only the exponentiation operator evaluates right-to-left while all the others evaluate left-to-right, so
 
 ```r
 x ^ y ^ z
@@ -345,33 +345,33 @@ The operators you can overload are listed, from highest to lowest precedence, be
 
 Operator      Usual meaning
 --------      -----------------
-`[` `[[`	    Indexing
-`^`	          Exponentiation (Evaluates right to left)
-`-` `+`	      Unary minus and plus
+`[` `[[`        Indexing
+`^`              Exponentiation (Evaluates right to left)
+`-` `+`          Unary minus and plus
 `%any%`       Special operators
-`*` `/`	      Multiply, divide
-`+` `-`	      Binary add and subtract
+`*` `/`          Multiply, divide
+`+` `-`          Binary add and subtract
 `<` `>` 
 `<=` `>=`     Ordering and comparison
 `==` `!=` 
-`!`	          Negation
-`&` `&&`	    And
-`|` `||`	    Or
+`!`              Negation
+`&` `&&`        And
+`|` `||`        Or
 `:=`          Assignment
 
-In the graph specifications language from the previous chapter we could use addition and `%=>%` together because user-defined infix operators—those defined using percentages symbols—have higher precedence than `+`, so we would construct edges before we would add them to a graph. Using `>` and `|` together works for the same reason. Further, because addition (or logical or) is evaluated from left to right, the `dag()` object we created at the beginning of a graph specification would be added to the first edge, which would produce another graph that then would be added to the next edge and so forth. If the evaluation of addition was right-to-left, we would be adding edges to edges, instead of graphs to edges, which would complicate the implementation of the parser.
+In the graph specifications language from the previous chapter, we could use addition and `%=>%` together because user-defined infix operators—those defined using percentages symbols—have higher precedence than `+`, so we would construct edges before we would add them to a graph. Using `>` and `|` together works for the same reason. Further, because addition (or logical or) is evaluated from left to right, the `dag()` object we created at the beginning of a graph specification would be added to the first edge, which would produce another graph that then would be added to the next edge and so forth. If the evaluation of addition were right-to-left, we would be adding edges to edges, instead of graphs to edges, which would complicate the implementation of the parser.
 
-The last operator in the table, the `:=` assignment operator, is special in the list. It isn’t actually an operator that is defined in R. You cannot use it as an assignment operator—for that you should use `<-` or `->`—but the R parser recognises it as an infix operator which means that you can use it when you design a domain-specific language.
+The last operator in the table, the `:=` assignment operator, is special in the list. It isn’t really an operator that is defined in R. You cannot use it as an assignment operator—for that, you should use `<-` or `->`—but the R parser recognises it as an infix operator which means that you can use it when you design a domain-specific language.
 
 
 
-[^lazy-eval]: I am not being entirely honest here. R has lazy evaluation, so there is no guarantee that arguments to a function will be evaluated at all—but if they are, they will be evaluated before we return from the function they are arguments to, so conceptually we can think of them as being evaluated before we call the function.
+[^lazy-eval]: I am not entirely honest here. R has lazy evaluation, so there is no guarantee that arguments to a function will be evaluated at all—but if they are, they will be evaluated before we return from the function they are arguments to, so conceptually we can think of them as being evaluated before we call the function.
 
 
 
 ## Code blocks
 
-A final syntactical component that can be very useful when designing a domain-specific language isn’t an operator but the braces that constructs a block of code. We cannot overload how these are interpreted, but we can certainly find use for them when we create a new language. Before we can exploit them fully, we need to know both how to manipulate expressions and how to evaluate them in different contexts—which we cover in the next chapter and in [Chapter @sec:env_and_expr]—but as a quick example, consider creating an index operator that repeats a statement a number of times. We can define it this way:
+A final syntactical component that can be very useful when designing a domain-specific language isn’t an operator but the braces that constructs a block of code. We cannot overload how these are interpreted, but we can certainly find a use for them when we create a new language. Before we can exploit them fully, we need to know both how to manipulate expressions and how to evaluate them in different contexts—which we cover in the next chapter and in [Chapter @sec:env_and_expr]—but as a quick example, consider creating an index operator that repeats a statement a number of times. We can define it this way:
 
 ```{r}
 `%times%` <- function(n, body) {
@@ -404,4 +404,4 @@ but since `{}` are considered expressions as well, we can also use a sequence of
 }
 ```
 
-Because we can use braces to pass blocks of code as arguments to functions, we can use these to create new control structures, like the `%times%` operator above. To fully exploit this, however, we need to understand how we evaluate general expressions in R, and in particular how we control the environment in which we evaluate them, and we need to parse and manipulate expressions to analyse blocks of code and maybe modify them. We will therefore leave further discussion of braces until we have covered those topics.
+Because we can use braces to pass blocks of code as arguments to functions, we can use these to create new control structures, like the `%times%` operator above. To fully exploit this, however, we need to understand how we evaluate general expressions in R, and in particular how we control the environment in which we evaluate them, and we need to parse and manipulate expressions to analyse blocks of code and maybe modify them. We will, therefore, leave further discussion of braces until we have covered those topics.s
