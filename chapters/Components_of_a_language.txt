@@ -1,4 +1,4 @@
-# Components of a programming language
+# Components of a programming language {#sec:components}
 
 While this is not a book about compilers and computer languages in general, it will be helpful to have some basic understanding of the components of software that parse and manipulate computer languages—or at least domain specific computer languages.
 
