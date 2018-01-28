@@ -64,7 +64,7 @@ collect_symbols_q <- function(expr, env) {
 }
 
 ## This is where the language start ######
-
+## Construction ####
 ctmc <- function()
   structure(list(from = NULL,
                  rate = NULL,
@@ -73,6 +73,12 @@ ctmc <- function()
             class = "ctmc")
 
 add_edge <- function(ctmc, from, rate, to) {
+  from <- enexpr(from) ; stopifnot(is_symbol(from))
+  to <- enexpr(to) ; stopifnot(is_symbol(to))
+
+  from <- as_string(from)
+  to <- as_string(to)
+
   ctmc$from <- cons(from, ctmc$from)
   ctmc$to <- cons(to, ctmc$to)
 
@@ -100,13 +106,15 @@ print.ctmc <- function(x, ...) {
 
 x <- 2
 m <- ctmc() %>%
-  add_edge("foo", a, "bar") %>%
-  add_edge("foo", 2*a, "baz") %>%
-  add_edge("foo", 4, "qux") %>%
-  add_edge("bar", b, "baz") %>%
-  add_edge("baz", a + x*b, "qux") %>%
-  add_edge("qux", a + UQ(x)*b, "foo")
+  add_edge(foo, a, bar) %>%
+  add_edge(foo, 2*a, baz) %>%
+  add_edge(foo, 4, qux) %>%
+  add_edge(bar, b, baz) %>%
+  add_edge(baz, a + x*b, qux) %>%
+  add_edge(qux, a + UQ(x)*b, foo)
 m
+
+## Rate matrices ####
 
 rate_matrix_function <- function(ctmc) {
   from <- lst_to_list(ctmc$from) %>% rev
@@ -141,4 +149,85 @@ Q(a = 2, b = 4)
 
 library(expm)
 transition_probabilities <- function(Q, t) expm(Q * t)
+
+## Traces ####
+ctmc_trace <- function(ctmc) {
+  nodes <- c(lst_to_list(ctmc$from), lst_to_list(ctmc$to)) %>%
+    unique %>% unlist
+  structure(list(nodes=nodes, states=NULL, at=NULL),
+            class="ctmc_trace")
+}
+start_state <- function(trace, state, at=0) {
+  state <- enexpr(state)
+  stopifnot(is_symbol(state))
+  state <- as_string(state)
+  stopifnot(state %in% trace$nodes)
+  stopifnot(is.numeric(at))
+
+  trace$states <- cons(state, trace$states)
+  trace$at <- cons(at, trace$at)
+
+  trace
+}
+transition <- function(trace, at, to) {
+  stopifnot(is.numeric(at))
+  to <- enexpr(to)
+  stopifnot(is_symbol(to))
+  to <- as_string(to)
+  stopifnot(to %in% trace$nodes)
+
+  trace$states <- cons(to, trace$states)
+  trace$at <- cons(at, trace$at)
+
+  trace
+}
+
+as_tibble.ctmc_trace <- function(x, ...) {
+  states <- x$states %>% lst_to_list %>% unlist %>% rev
+  at <- x$at %>% lst_to_list %>% unlist %>% rev
+  tibble::tibble(state = states, at = at)
+}
+print.ctmc_trace <- function(x, ...) {
+  df <- tibble::as_tibble(x)
+  print(df)
+}
+
+tr <- ctmc_trace(m) %>%
+  start_state(foo) %>%
+  transition(0.1, bar) %>%
+  transition(0.3, baz) %>%
+  transition(0.5, qux) %>%
+  transition(0.7, foo) %>%
+  transition(1.1, baz)
+tr
+
+
+## Likelihoods ####
+likelihood_function <- function(ctmc, trace) {
+  rate_func <- ctmc %>% rate_matrix_function
+  trace_df <- tibble::as_tibble(trace)
+
+  lhd_function <- function() {
+    args <- as_list(environment())
+    Q <- do.call(rate_func, args)
+
+    n <- length(trace_df$state)
+    from <- trace_df$state[-n]
+    to <- trace_df$state[-1]
+    delta_t <- trace_df$at[-1] - trace_df$at[-n]
+
+    lhd <- 1
+    for (i in seq_along(from)) {
+      P <- transition_probabilities(Q, delta_t[i])
+      lhd <- lhd * P[from[i],to[i]]
+    }
+    lhd
+  }
+  formals(lhd_function) <- formals(rate_func)
+
+  lhd_function
+}
+
+lhd <- m %>% likelihood_function(tr)
+lhd(a = 2, b = 4)
 
