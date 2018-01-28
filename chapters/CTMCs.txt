@@ -130,14 +130,15 @@ add_edge <- function(ctmc, from, rate, to) {
 
 We use `enexpr` for `from` and `to` since we want these symbols to be just that, symbols, and not something we will want to evaluate in any context. We use `enquo` for the `rate` parameter, on the other hand, be cause we do want to have its environment available when we evaluate the expression. We do not evaluate it yet, though. We cannot evaluate it until we know the parameters for the model, and we do not want those to be fixed inside the CTMC object. We use the rate environment, however, when extracting the unbound variables in the rate expression.
 
-
+Generally, it is a good idea to be able to get some information about an object we construct by printing it, but the default print function for a `ctmc` object will show the list of lists. This representation, especially for the linked lists, can be hard to decipher. Instead, we can implement a print function for this class by defining a function with the name `print.ctmc`. The information we want to display is the parameters of the model and the edge structure, and we can implement this function like this:
 
 ```{r}
 print.ctmc <- function(x, ...) {
   from <- lst_to_list(x$from) %>% rev
   to <- lst_to_list(x$to) %>% rev
   rate <- lst_to_list(x$rate) %>% rev
-  parameters <- lst_to_list(x$params) %>% unlist %>% unique %>% rev
+  parameters <- lst_to_list(x$params) %>% 
+    unlist %>% unique %>% rev
 
   cat("CTMC:\\n")
   cat("parameters:", paste(parameters), "\\n")
@@ -145,9 +146,13 @@ print.ctmc <- function(x, ...) {
   for (i in seq_along(from)) {
     cat(from[[i]], "->", to[[i]], "\\t[", deparse(UQE(rate[[i]])), "]\\n")
   }
-  cat("\n")
+  cat("\\n")
 }
 ```
+
+The implementation is straightforward. We translate the linked lists into lists, to make them easier to work with when we loop over the edges, and we reverse them so we will display them in the order in which they were added to the model. With the linked lists we prepend new edges, so they are represented in the opposite order than the one in which they were added. For the parameters, we remove duplications using `unique` as well. After that, we simply print the parameters as a list and print a line for each edge, showing the “from” and “to” state together with the rate expression on the edge. For the latter, we use `UQE` to get the bare expression, rather than the quosure, and we use the function `deparse` to translate the expression into a string that we can print.
+
+With the three functions we have defined so far, we can now create and print a continuous time Markov chain:
 
 ```{r}
 x <- 2
@@ -161,7 +166,11 @@ m <- ctmc() %>%
 m
 ```
 
+This example object shows that we can have expressions on the edges that are constants, such as the edge from `foo` to `qux`  that has the rate four; we can have expressions with unbound variables, `a`, `b`, and `2*a`; and we can have expressions that involve a bound variable, the last two edges. Notice here, that the second-to-last edge, from `baz` to `qux`, has a rate expression that includes the (unevaluated) variable `x` while the last edge, from `qux` to `foo`, contains the expression `a + 2*b`, where the value of `x` has been inserted. This is the difference between including a bound variable and unquoting it in the expression. Since `x` is a bound variable, it is not considered a parameter of the model, but in the second-to-last expression, it will be used when we evaluate the rate. If we change its value we also change the value of the rate expression. For the last rate expression, we have already inserted the value of `x`, so here we will not change the expression by changing the value of `x`.
+
 ## Constructing a rate matrix
+
+
 
 ```{r}
 rate_matrix_function <- function(ctmc) {
@@ -170,7 +179,8 @@ rate_matrix_function <- function(ctmc) {
   rate <- lst_to_list(ctmc$rate) %>% rev
 
   nodes <- c(from, to) %>% unique %>% unlist
-  parameters <- lst_to_list(ctmc$params) %>% unlist %>% unique %>% rev
+  parameters <- lst_to_list(ctmc$params) %>% 
+    unlist %>% unique %>% rev
 
   n <- length(nodes)
 
@@ -202,8 +212,8 @@ Q(a = 2, b = 4)
 ctmc_trace <- function(ctmc) {
   nodes <- c(lst_to_list(ctmc$from), lst_to_list(ctmc$to)) %>%
     unique %>% unlist
-  structure(list(nodes=nodes, states=NULL, at=NULL),
-            class="ctmc_trace")
+  structure(list(nodes = nodes, states = NULL, at = NULL),
+            class = "ctmc_trace")
 }
 start_state <- function(trace, state, at=0) {
   state <- enexpr(state)
