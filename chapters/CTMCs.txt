@@ -144,7 +144,8 @@ print.ctmc <- function(x, ...) {
   cat("parameters:", paste(parameters), "\\n")
   cat("transitions:\\n")
   for (i in seq_along(from)) {
-    cat(from[[i]], "->", to[[i]], "\\t[", deparse(UQE(rate[[i]])), "]\\n")
+    cat(from[[i]], "->", to[[i]], 
+        "\\t[", deparse(UQE(rate[[i]])), "]\\n")
   }
   cat("\\n")
 }
@@ -170,7 +171,9 @@ This example object shows that we can have expressions on the edges that are con
 
 ## Constructing a rate matrix
 
+We saw how we could translate a list of edges into a rate matrix in [Chapter @sec:components], but in this chapter we want to do a little more. In [Chapter @sec:components], we had numeric rates on the edges; we now have expressions. Instead of translating the CTMC into a rate matrix, we will create a function for creating rate matrices—a function that, given values for the parameters of the Markov model, will give us the corresponding rate matrix.
 
+We implement this functionality via a closure. We write a function that extracts the information we need to build the rate matrix from the `ctmc` object and then define a function for computing the rate matrix given the model’s parameters. It then returns this closure-function. The implementation can look like this:
 
 ```{r}
 rate_matrix_function <- function(ctmc) {
@@ -185,10 +188,11 @@ rate_matrix_function <- function(ctmc) {
   n <- length(nodes)
 
   f <- function() {
+    args <- as_list(environment())
     Q <- matrix(0, nrow = n, ncol = n)
     rownames(Q) <- colnames(Q) <- nodes
     for (i in seq_along(from)) {
-      Q[from[[i]], to[[i]]] <- eval_tidy(rate[[i]], environment())
+      Q[from[[i]], to[[i]]] <- eval_tidy(rate[[i]], args)
     }
     diag(Q) <- -rowSums(Q)
     Q
@@ -197,14 +201,35 @@ rate_matrix_function <- function(ctmc) {
 
   f
 }
+```
 
+Once again, we translate the linked lists into `list` objects and reverse them. We then get a list of unique nodes in the model by combining the `from` and `to` lists, removing duplicates, and we translate the resulting list into a vector that we will later use to set row- and column-names of the rate matrix. We extract the parameters for the model by translating the linked list into a `list`, and we then translate that into a vector, remove duplicates, and reverse the result to get the parameters in the order in which they were added to the edges.
+
+The closure we define initially takes no formal arguments. We set those from the CTMC arguments after we have defined the function. We do in this way simply because it is an easier way to define the function than through constructing expressions and using something like the `new_function` construction we have used earlier. Before we return the closure, it *will* have a list of formal arguments. Since we don’t know what these will be, we use a trick to get hold of them inside the closure: we get the local environment before we define any local variables—so at this point it will only contain the parameters passed to the function call—and make a list out of those. That list, we can use later to over scope the evaluation of the rate expressions inside the closure.
+
+For the actual construction of the rate matrix, there is little to surprise. We get the size of the matrix from the number of states in the CTMC, create the matrix, name rows and columns according to the nodes they represent, then we (tidy) evaluate all the rate expressions to fill in the cells of the matrix, and finally we adjust the diagonal so all rows sum to zero.
+
+We now have a verb in our language for getting a rate matrix function:
+
+```{r}
 Q <- m %>% rate_matrix_function
 Q
-Q(a = 2, b = 4)
+```
 
+When we provide the model parameters to this function, we get the rate matrix:
+
+```{r}
+Q(a = 2, b = 4)
+```
+
+Remember that the edge from `baz` to `qux` holds an expression that refers to the global variable `x`. If we change the value of this variable, we also change the result of evaluating the `Q` function:
+
+```{r}
 x <- 1
 Q(a = 2, b = 4)
 ```
+
+The edge from `qux` to `foo`, where we substitute the value for `x` at the time we created the edge, using `UQ`, does not change.
 
 ## Traces
 

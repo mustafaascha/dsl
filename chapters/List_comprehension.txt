@@ -117,7 +117,7 @@ primes <- lc(p, p = 2:100, !(p %in% not_primes)) %>% unlist
 primes
 ```
 
-This is a variant of the Sieve of Eratosthenes algorithm. We compute all the numbers that are not primes (because they are multiples of the numbers) and then we identify the numbers that are not in that list. We let `x` go from two to 10—to identify the primes less than $n$ it suffices to do this up to $\\sqrt{n}$$, and for each of those we create a list of the various multiples of `x`. We then get rid of duplicates to make the next step faster; in that step, we simply filter on the numbers that are not primes.
+This is a variant of the Sieve of Eratosthenes algorithm. We compute all the numbers that are not primes (because they are multiples of the numbers) and then we identify the numbers that are not in that list. We let `x` go from two to 10—to identify the primes less than $n$ it suffices to do this up to $\\sqrt{n}$, and for each of those we create a list of the various multiples of `x`. We then get rid of duplicates to make the next step faster; in that step, we simply filter on the numbers that are not primes.
 
 A solution for general $n$ would look like this: 
 
