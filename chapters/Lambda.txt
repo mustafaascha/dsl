@@ -4,7 +4,7 @@ With the techniques we have seen so far, we are now able to implement some usefu
 
 ## Lambda expressions
 
-Lambda expressions are anonymous functions, i.e., functions we have not named. In R, we already have anonymous functions. It is actually the default kind of functions—whenever we define function it is anonymous until we assign it to a variable. If we do not wish to shave a function in a variable to get access to it later, we can just use the `function` expression to create it where we need it. For example, to map over a vector of numbers we could write:
+Lambda expressions are anonymous functions, i.e., functions we have not named. In R, we already have anonymous functions. It is the default kind of functions—whenever we define a function, it is anonymous until we assign it to a variable. If we do not wish to shave a function in a variable to get access to it later, we can just use the `function` expression to create it where we need it. For example, to map over a vector of numbers, we could write:
 
 ```{r}
 sapply(1:4, function(x) x**2)
@@ -18,7 +18,7 @@ It is a toy example, of course, since vector expressions preferable in situation
 
 but it illustrates the point.
 
-Using `function` expressions is very verbose, so we might want to construct an alternative syntax for anonymous functions and we can use that wish as an exercises in constructing a domain specific language. Our goal is to change the `sapply` syntax above into this syntax:
+Using `function` expressions is very verbose, so we might want to construct an alternative syntax for anonymous functions, and we can use that wish as an exercise in constructing a domain specific language. Our goal is to change the `sapply` syntax above into this syntax:
 
 ```r
 sapply(1:4, x := x**2)
@@ -26,7 +26,7 @@ sapply(1:4, x := x**2)
 
 We use the `:=` assignment operator for two reasons. One, we can overload it, something we cannot do with `->` or `<-`, and two, it has the lowest precedence of the operators, so the operator we create will be called with the left- and right-hand sides before these are evaluated.
 
-To implement this syntax, we need to make the left hand side of assignments into function headers—which means pair lists of arguments—and we need to make the right hand side into a function body we can evaluate in the environment where we define the lambda expression. The good news is, that this only involves techniques we have already seen. We can write a function for turning a list of arguments into a pair list we can use to define the formal arguments of a function as this:
+To implement this syntax, we need to make the left-hand side of assignments into function headers—which means pair lists of arguments—and we need to make the right-hand side into a function body we can evaluate in the environment where we define the lambda expression. The good news is that this only involves techniques we have already seen. We can write a function for turning a list of arguments into a pair list we can use to define the formal arguments of a function like this:
 
 ```{r}
 make_args_list <- function(args) {
@@ -36,7 +36,7 @@ make_args_list <- function(args) {
 }
 ```
 
-For the assignment operator, we need to use `substitute` to avoid evaluating the two arguments, we then use `make_args_list` to turn the left hand side into formal arguments but we keep the right hand side as the expression it is. We then turn the combination into a function using `new_function` from the `rlang` package. Since we want to evaluate the new function in the scope where we define the lambda expression, we use `caller_env` to get this environment and provide it to `new_function`. The entire implementation is as simple as this:
+For the assignment operator, we need to use `substitute` to avoid evaluating the two arguments, we then use `make_args_list` to turn the left-hand side into formal arguments, but we keep the right-hand side as the expression it is. We then turn the combination into a function using `new_function` from the `rlang` package. Since we want to evaluate the new function in the scope where we define the lambda expression, we use `caller_env` to get this environment and provide it to `new_function`. The entire implementation is as simple as this:
 
 ```{r}
 `:=` <- function(header, body) {
@@ -65,7 +65,7 @@ but since R interprets commas a certain way, and we cannot override that, this i
 mapply(.(x,y) := x*y, x = 1:6, y = 1:2)
 ```
 
-What happens here is that the `make_args_list` translates all the components of the left hand side expression into function parameters. A function call object is just like any other expression list, so in this particular example, we create a function with three arguments, `.`, `x` and `y`. Since `.` is not used inside the function body, it doesn’t matter that we do not provide it when the function is called. If we reused one of the parameter names as the function name in the call, however, we see that this is what is happening:
+What happens here is that the `make_args_list` translates all the components of the left-hand side expression into function parameters. A function call object is just like any other expression list, so in this particular example, we create a function with three arguments, `.`, `x` and `y`. Since `.` is not used inside the function body, it doesn’t matter that we do not provide it when the function is called. If we reused one of the parameter names as the function name in the call, however, we see that this is what is happening:
 
 ```{r}
 mapply(x(x,y) := x*y, x = 1:6, y = 1:2)
@@ -94,7 +94,7 @@ mapply(x(x,y) := x*y, x = 1:6, y = 1:2)
 
 Using an assignment operator to define a function in this way might not be the most obvious syntax you could choose, but we have plenty of options for playing around with alternatives.
 
-Since the functionality we have implemented is just a single function, we could start with just that. There is no reason to have a special syntax if all we need is a single function, so we could implement lambda expressions as this:
+Since the functionality that we have implemented is just a single function, we could start with just that. There is no reason to have a special syntax if all we need is a single function, so instead, we could implement lambda expressions like this:
 
 ```{r}
 lambda <- function(...) {
@@ -113,11 +113,11 @@ sapply(1:4, lambda(x, 4 * x**2))
 mapply(lambda(x, y, y*x), x = 1:4, y = 4:7)
 ```
 
-The `eval(substitute(alist(...)))` expression might look a little odd if you are not used to it, but what we do is that we take the variable number of arguments, captured by the three dots argument, and create an expression that makes those into a list. The function `alist`, unlike `list`, will not evaluate the expressions but keep the arguments as they are, which is what we want in this case. The `substitute` expression just creates the expression, so we need to evaluate it, which we do with `eval`, to actually get the list. Once we have the list, we simply make the first arguments into function parameters and the last into the body of the lambda expression and create the function.
+The `eval(substitute(alist(...)))` expression might look a little odd if you are not used to it, but what we do is that we take the variable number of arguments, captured by the three dots argument, and create an expression that makes those into a list. The function `alist`, unlike `list`, will not evaluate the expressions but keep the arguments as they are, which is what we want in this case. The `substitute` expression just creates the expression, so we need to evaluate it, which we do with `eval`, to get the list. Once we have the list, we make the first arguments into function parameters and the last into the body of the lambda expression and create the function.
 
 In production code, we probably should add some checks to make sure that the lambda expression parameters are symbols and not general expressions and such, but the full functionality for lambda expressions is present in this one function.
 
-Of course, the `lambda` function does not behave like a normal function. The “non-standard evaluation” (NSE) we apply to make a function out of the arguments to `lambda` is very different from how functions normally behave, where the arguments we provide are considered values rather than symbols and expressions. To make it clear from syntax that something different is happening, you might want to change the syntax slightly. For example, instead of using parentheses, we could go for square brackets. We can implement a version that uses those like this:
+Of course, the `lambda` function does not behave like a normal function. The “non-standard evaluation” (NSE) we apply to make a function out of the arguments to `lambda` is very different from how functions normally behave, where the arguments we provide are considered values rather than symbols and expressions. To make it clear from the syntax that something different is happening, you might want to change the syntax slightly. For example, instead of using parentheses, we could go for square brackets. We can implement a version that uses those like this:
 
 ```{r}
 lambda <- structure(NA, class = "lambda")
@@ -137,8 +137,8 @@ sapply(1:4, lambda[x, 4 * x**2])
 mapply(lambda[x, y, y*x], x = 1:4, y = 4:7)
 ```
 
-The approach here is to make `lambda` an object with a class we can use for defining a special case of the subscript operator. The only purpose of `lambda` is dispatch the subscript function to the right specialisation, and that specialisation of the subscript operator does exactly what the `lambda` function above did. The only difference is that it takes an extra first argument, which is the `lambda` object. We don’t use it for anything so we simply ignore it.
+The approach here is to make `lambda` an object with a class we can use for defining a special case of the subscript operator. The only purpose of `lambda` is to dispatch the subscript function to the right specialisation, and that specialisation of the subscript operator does exactly what the `lambda` function above did. The only difference is that it takes an extra first argument, which is the `lambda` object. We don’t use it for anything, so we simply ignore it.
 
 ## Don’t do this at home
 
-Implementing syntactic sugar for lambda expressions as we have just done only saves us very little typing compared to using `function` expressions and potentially does more harm than good—after all, everyone should be familiar with `function` expressions but they might not be with our home-made syntax for the same. Consequently, I would not recommend that you write new syntax for language constructions that are already implemented in R. We implemented the lambda expressions here simply as an example that illustrates how we can construct new syntax with very little code.
+Implementing syntactic sugar for lambda expressions as we have just done only saves us minimal typing compared to using `function` expressions and potentially does more harm than good—after all, everyone should be familiar with `function` expressions, but they might not be with our home-made syntax for the same. Consequently, I would not recommend that you construct a new syntax for language constructions that are already implemented in R. We implemented the lambda expressions here simply as an example that illustrates how we can construct new syntax with very little code.

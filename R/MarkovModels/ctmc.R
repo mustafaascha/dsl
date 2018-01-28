@@ -1,6 +1,7 @@
+## preliminary stuff -- already defined elsewhere
+
 library(magrittr)
 library(rlang)
-
 
 cons <- function(car, cdr) list(car = car, cdr = cdr)
 lst_length <- function(lst) {
@@ -53,17 +54,6 @@ make_args_list <- function(args) {
   as.pairlist(res)
 }
 
-
-
-ctmc <- function()
-  structure(list(from = NULL,
-                 rate = NULL,
-                 to = NULL,
-                 params = NULL,
-                 compiled = FALSE),
-            class = "ctmc")
-
-
 # expr has to be already quoted here
 collect_symbols_q <- function(expr, env) {
   bound <- c()
@@ -73,49 +63,58 @@ collect_symbols_q <- function(expr, env) {
     unlist
 }
 
+## This is where the language start ######
+
+ctmc <- function()
+  structure(list(from = NULL,
+                 rate = NULL,
+                 to = NULL,
+                 params = NULL),
+            class = "ctmc")
+
 add_edge <- function(ctmc, from, rate, to) {
   ctmc$from <- cons(from, ctmc$from)
   ctmc$to <- cons(to, ctmc$to)
 
   r <- enquo(rate)
   ctmc$rate <- cons(r, ctmc$rate)
-  ctmc$params <- cons(collect_symbols_q(r, get_env(r)), ctmc$params)
+  ctmc$params <- cons(collect_symbols_q(UQE(r), get_env(r)), ctmc$params)
 
   ctmc
 }
 
 print.ctmc <- function(x, ...) {
-  from <- lst_to_list(x$from)
-  to <- lst_to_list(x$to)
-  rate <- lst_to_list(x$rate)
-  parameters <- lst_to_list(x$params) %>%
-    purrr::discard(is_null) %>% unique
+  from <- lst_to_list(x$from) %>% rev
+  to <- lst_to_list(x$to) %>% rev
+  rate <- lst_to_list(x$rate) %>% rev
+  parameters <- lst_to_list(x$params) %>% unlist %>% unique %>% rev
 
   cat("CTMC:\n")
   cat("parameters:", paste(parameters), "\n")
   cat("transitions:\n")
   for (i in seq_along(from)) {
-    cat(from[[i]], "->", to[[i]], "\t[", deparse(rate[[i]]), "]\n")
+    cat(from[[i]], "->", to[[i]], "\t[", deparse(UQE(rate[[i]])), "]\n")
   }
   cat("\n")
 }
 
-
-
+x <- 2
 m <- ctmc() %>%
   add_edge("foo", a, "bar") %>%
   add_edge("foo", 2*a, "baz") %>%
-  add_edge("bar", b, "baz")
+  add_edge("foo", 4, "qux") %>%
+  add_edge("bar", b, "baz") %>%
+  add_edge("baz", a + x*b, "qux") %>%
+  add_edge("qux", a + UQ(x)*b, "foo")
 m
 
 rate_matrix_function <- function(ctmc) {
-  from <- lst_to_list(ctmc$from)
-  to <- lst_to_list(ctmc$to)
-  rate <- lst_to_list(ctmc$rate)
+  from <- lst_to_list(ctmc$from) %>% rev
+  to <- lst_to_list(ctmc$to) %>% rev
+  rate <- lst_to_list(ctmc$rate) %>% rev
 
   nodes <- c(from, to) %>% unique %>% unlist
-  parameters <- lst_to_list(ctmc$params) %>%
-    purrr::discard(is_null) %>% unique
+  parameters <- lst_to_list(ctmc$params) %>% unlist %>% unique %>% rev
 
   n <- length(nodes)
 
@@ -133,9 +132,12 @@ rate_matrix_function <- function(ctmc) {
   f
 }
 
-q <- m %>% rate_matrix_function
-q
-q(a = 2, b = 4)
+Q <- m %>% rate_matrix_function
+Q
+Q(a = 2, b = 4)
+
+x <- 1
+Q(a = 2, b = 4)
 
 library(expm)
 transition_probabilities <- function(Q, t) expm(Q * t)
