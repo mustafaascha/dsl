@@ -369,6 +369,31 @@ rlang::expr(UQ(x) + y)
 
 When we translate a function argument into an expression, with `enexpr`, or a quosure, with `enquo`, the bang-bang operator or the `UQ` function will substitute the results of expressions into the expressions/quosures we create, which is why the second `filter_on_na` function worked.
 
+You can unquote on the left-hand side of named parameters in function calls as well, but the R parser does not allow you to write code such as
+
+```r
+f(UQ(var) = expr)
+```
+
+because the left-hand side in function call arguments must be symbols. To get around this problem, the `rlang` package provide an implementation of the `:=` operator that does allow such assignments. Consider:
+
+```{r}
+f <- function(df, summary_name, summary_expr) {
+  summary_name <- rlang::enexpr(summary_name)
+  summary_expr <- rlang::enquo(summary_expr)
+  df %>% mutate(UQ(summary_name) := UQ(summary_expr))
+}
+tibble::tibble(x = 1:4, y = 1:4) %>% f(z, x + y)
+```
+
+The named function call in 
+
+```r
+  df %>% mutate(UQ(summary_name) := UQ(summary_expr))
+```
+
+behaves like a usual function call with named parameters after the quasi-quotation substitution has taken place.
+
 A final quasi-quotation function you must now is `UQS`. This function behaves as `UQ` in that it evaluates its arguments and put the result into a quoted expression, but it is intended for splicing a list of quosures into a function call.
 
 Consider this example:
