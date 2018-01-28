@@ -1,6 +1,6 @@
 # Continuous time Markov chains
 
-**fixme**
+We now turn to an example of a domain-specific language based on a combination of tidy evaluation and the `magrittr` pipe operator; we will write a language for specifying continuous time Markov chains (CTMCs) and for computing the likelihood of parameters in such CTMCs given a trace of which states the chain is in at different time points.
 
 We will use the packages `magrittr` and `rlang` to construct the language 
 
@@ -10,9 +10,9 @@ library(magrittr)
 library(rlang)
 ```
 
-And reuse the linked list code plus the functions `collect_symbols_rec` and `make_args_list` we implemented in previous chapters.
+and we will reuse the linked list code plus the functions `collect_symbols_rec` and `make_args_list` we implemented in previous chapters.
 
-```{r, echo=false}
+```{r, echo=FALSE}
 cons <- function(car, cdr) list(car = car, cdr = cdr)
 lst_length <- function(lst) {
   len <- 0
@@ -65,7 +65,7 @@ make_args_list <- function(args) {
 }
 ```
 
-We will not use the `collect_symbols` function we implemented to collect unbound variables but instead a version that expects its expression to be quoted already:
+We will use these functions to construct functions from a CTMC specification by extracting the unbound symbols in expressions we associate with transition rates. We will not use the `collect_symbols` function we implemented to collect unbound variables but instead a version that expects its expression to be quoted already:
 
 ```{r}
 collect_symbols_q <- function(expr, env) {
@@ -81,6 +81,8 @@ This is because we plan to quote expressions in the DSL functions and then call 
 
 ## Constructing the Markov chain 
 
+We explored several approaches to design a language for CTMCs in [Chapter @sec:components]. In this chapter, we will use the variation that uses the pipe operator, `%>%`, together with an `add_edge` function. We will collect edges in three lists: one list for the “from” states, one for the “to” states, and one for the rates associated with the transitions. In addition, we will collect the unbound variables in the rate expressions when we create new edges, so later changes to scopes will not affect the parameters of the CTMC model. To represent a CTMC, we create a class and a list that holds the “from”, “to”, rates and parameters lists:
+
 ```{r}
 ctmc <- function()
   structure(list(from = NULL,
@@ -88,7 +90,25 @@ ctmc <- function()
                  to = NULL,
                  params = NULL),
             class = "ctmc")
+```
 
+We want the syntax for constructing a CTMC to look like this:
+
+```r
+m <- ctmc() %>%
+  add_edge(foo, a, bar) %>%
+  add_edge(foo, 2*a, baz) %>%
+  add_edge(foo, 4, qux) %>%
+  add_edge(bar, b, baz) %>%
+  add_edge(baz, a + x*b, qux) %>%
+  add_edge(qux, a + UQ(x)*b, foo)
+```
+
+Therefore, we need to implement the `add_edge` such that it takes four arguments: the CTMC, the “from” state, the rate of the transition, and the “to” state. The CTMC is implicitly provided to the function calls when we are using the pipe operator. The other three arguments should be provided as expressions and the `add_edge` function will implement a non-standard evaluation to handle them.
+
+We want the “from” and “to” states to be single symbols, but we will translate these into strings that we can use as row- and column-names in the rate matrix for the CTMC. The rate associated with a transition should be an expression, and to get the scope of the expression right, we will translate it into a quosure. We will then extract the unbound variables in this expression—unbound in the environment in which the quosure  is defined—and add these to the parameters of the model. The implementation looks like this:
+
+```{r}
 add_edge <- function(ctmc, from, rate, to) {
   from <- enexpr(from) ; stopifnot(is_symbol(from))
   to <- enexpr(to) ; stopifnot(is_symbol(to))
@@ -101,26 +121,35 @@ add_edge <- function(ctmc, from, rate, to) {
 
   r <- enquo(rate)
   ctmc$rate <- cons(r, ctmc$rate)
-  ctmc$params <- cons(collect_symbols_q(UQE(r), get_env(r)), ctmc$params)
+  ctmc$params <- cons(collect_symbols_q(UQE(r), get_env(r)), 
+                       ctmc$params)
 
   ctmc
 }
+```
 
+We use `enexpr` for `from` and `to` since we want these symbols to be just that, symbols, and not something we will want to evaluate in any context. We use `enquo` for the `rate` parameter, on the other hand, be cause we do want to have its environment available when we evaluate the expression. We do not evaluate it yet, though. We cannot evaluate it until we know the parameters for the model, and we do not want those to be fixed inside the CTMC object. We use the rate environment, however, when extracting the unbound variables in the rate expression.
+
+
+
+```{r}
 print.ctmc <- function(x, ...) {
   from <- lst_to_list(x$from) %>% rev
   to <- lst_to_list(x$to) %>% rev
   rate <- lst_to_list(x$rate) %>% rev
   parameters <- lst_to_list(x$params) %>% unlist %>% unique %>% rev
 
-  cat("CTMC:\n")
-  cat("parameters:", paste(parameters), "\n")
-  cat("transitions:\n")
+  cat("CTMC:\\n")
+  cat("parameters:", paste(parameters), "\\n")
+  cat("transitions:\\n")
   for (i in seq_along(from)) {
-    cat(from[[i]], "->", to[[i]], "\t[", deparse(UQE(rate[[i]])), "]\n")
+    cat(from[[i]], "->", to[[i]], "\\t[", deparse(UQE(rate[[i]])), "]\\n")
   }
   cat("\n")
 }
+```
 
+```{r}
 x <- 2
 m <- ctmc() %>%
   add_edge(foo, a, bar) %>%
