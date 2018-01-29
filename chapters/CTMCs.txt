@@ -293,15 +293,20 @@ tr
 
 ## Computing likelihoods
 
+The final functionality we will implement for this example is for computing the likelihood of parameters given a CTMC and a trace. Back in [Chapter @sec:components] we saw how to translate a rate matrix into a transition-probability matrix by first multiplying the rate matrix by a scalar—the time period that has passed between two observations—and then (matrix-)exponentiating the result. We will reuse the function we implemented there:
+
 ```{r, echo=FALSE}
 suppressPackageStartupMessages(library(expm, quietly = TRUE))
+transition_probabilities <- function(Q, t) expm(Q * t)
 ```
 ```r
 library(expm)
-```
-```{r}
 transition_probabilities <- function(Q, t) expm(Q * t)
 ```
+
+For computing the likelihood, we will create a verb in our domain-specific language that translates a CTMC and a trace into a function. This function will take the parameters of the CTMC as arguments—as the function for creating rate matrices we wrote above—and then return the likelihood for those parameters. This is a function we could then use for maximum-likelihood estimation by combining it with an optimisation algorithm, of which there are several available in various R packages.
+
+The implementation is straightforward. We get the rate matrix function from the `ctmc` object and translate the trace into a data frame and store the results in the closure for the function. Then we use the same trick as we used above to get the arguments inside the closure, evaluate the rate-matrix function to get the rate-matrix and put the data from the data frame into a format we need for the computation. That computation is simply running through the trace and computing the transition probabilities from two consecutive observations. Since it is a Markov model, the joint probability is the product of those. After we have created the closure, we set its formal arguments, similar to what we did with the rate-matrix function.
 
 ```{r}
 get_likelihood_function <- function(ctmc, trace) {
@@ -328,8 +333,15 @@ get_likelihood_function <- function(ctmc, trace) {
   
   lhd_function
 }
+```
 
+That is it; we can now compute likelihoods for a CTMC.
+
+```{r}
 lhd <- m %>% get_likelihood_function(tr)
 lhd(a = 2, b = 4)
 ```
 
+In an actual data analysis context, we probably would want to compute the log-likelihood instead. For traces of any useful length, the actual likelihood will lead to underflow since we are dealing with finite-bit floating point numbers. Modifying the likelihood function to a log-likelihood function is a simple matter of changing the product to a sum and taking the log of `P[from[i],to[i]]`.
+
+There might be more functionality you would like to add to a language like this, but even with the few functions we have implemented so far, we have a useful domain-specific language. We have not used any operator overloading to implement it; we didn’t have to. We have used tidy evaluation extensively, though, to implement the non-standard evaluation we use for rate expressions.
