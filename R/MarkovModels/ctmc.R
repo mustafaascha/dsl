@@ -130,13 +130,6 @@ rate_matrix_function <- function(ctmc) {
   f
 }
 
-Q <- m %>% rate_matrix_function
-Q
-Q(a = 2, b = 4)
-
-x <- 1
-Q(a = 2, b = 4)
-
 library(expm)
 transition_probabilities <- function(Q, t) expm(Q * t)
 
@@ -182,14 +175,6 @@ print.ctmc_trace <- function(x, ...) {
   print(df)
 }
 
-tr <- ctmc_trace(m) %>%
-  start_state(foo) %>%
-  transition(0.1, bar) %>%
-  transition(0.3, baz) %>%
-  transition(0.5, qux) %>%
-  transition(0.7, foo) %>%
-  transition(1.1, baz)
-tr
 
 
 ## Likelihoods ####
@@ -217,9 +202,6 @@ likelihood_function <- function(ctmc, trace) {
 
   lhd_function
 }
-
-lhd <- m %>% likelihood_function(tr)
-lhd(a = 2, b = 4)
 
 
 
@@ -251,3 +233,24 @@ tr
 ## Compute a likelihood ####
 lhd <- m %>% likelihood_function(tr)
 lhd(a = 2, b = 4)
+
+
+
+
+
+## Plotting CTMCs ####
+plot.ctmc <- function(x, ...) {
+  from <- x$from %>% lst_to_list %>% unlist %>% rev
+  to <- x$to %>% lst_to_list %>% unlist %>% rev
+  rate <- x$rate %>% lst_to_list %>%
+    purrr::map(~deparse(UQE(.x))) %>% rev
+
+  df <- tibble::tibble(from = from, to = to)
+  g <- igraph::graph_from_data_frame(df, directed = TRUE)
+
+  plot(g, layout = igraph::layout_with_dh,
+       vertex.color = "white",
+       edge.label = rate, edge.color = "black", edge.curved = 0.25,
+       ...)
+}
+plot(m)
