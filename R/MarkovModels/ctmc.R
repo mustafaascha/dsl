@@ -104,16 +104,6 @@ print.ctmc <- function(x, ...) {
   cat("\n")
 }
 
-x <- 2
-m <- ctmc() %>%
-  add_edge(foo, a, bar) %>%
-  add_edge(foo, 2*a, baz) %>%
-  add_edge(foo, 4, qux) %>%
-  add_edge(bar, b, baz) %>%
-  add_edge(baz, a + x*b, qux) %>%
-  add_edge(qux, a + UQ(x)*b, foo)
-m
-
 ## Rate matrices ####
 
 rate_matrix_function <- function(ctmc) {
@@ -231,3 +221,33 @@ likelihood_function <- function(ctmc, trace) {
 lhd <- m %>% likelihood_function(tr)
 lhd(a = 2, b = 4)
 
+
+
+## Constructing the CTMC ####
+x <- 2
+m <- ctmc() %>%
+  add_edge(foo, a, bar) %>%
+  add_edge(foo, 2*a, baz) %>%
+  add_edge(foo, 4, qux) %>%
+  add_edge(bar, b, baz) %>%
+  add_edge(baz, a + x*b, qux) %>%
+  add_edge(qux, a + UQ(x)*b, foo)
+m
+
+## Get a rate matrix ####
+Q <- m %>% rate_matrix_function
+Q(a = 2, b = 4)
+
+## Constructing a trace ####
+tr <- ctmc_trace(m) %>%
+  start_state(foo) %>%
+  transition(0.1, bar) %>%
+  transition(0.3, baz) %>%
+  transition(0.5, qux) %>%
+  transition(0.7, foo) %>%
+  transition(1.1, baz)
+tr
+
+## Compute a likelihood ####
+lhd <- m %>% likelihood_function(tr)
+lhd(a = 2, b = 4)

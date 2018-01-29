@@ -176,7 +176,7 @@ We saw how we could translate a list of edges into a rate matrix in [Chapter @se
 We implement this functionality via a closure. We write a function that extracts the information we need to build the rate matrix from the `ctmc` object and then define a function for computing the rate matrix given the model’s parameters. It then returns this closure-function. The implementation can look like this:
 
 ```{r}
-rate_matrix_function <- function(ctmc) {
+get_rate_matrix_function <- function(ctmc) {
   from <- lst_to_list(ctmc$from) %>% rev
   to <- lst_to_list(ctmc$to) %>% rev
   rate <- lst_to_list(ctmc$rate) %>% rev
@@ -209,10 +209,10 @@ The closure we define initially takes no formal arguments. We set those from the
 
 For the actual construction of the rate matrix, there is little to surprise. We get the size of the matrix from the number of states in the CTMC, create the matrix, name rows and columns according to the nodes they represent, then we (tidy) evaluate all the rate expressions to fill in the cells of the matrix, and finally we adjust the diagonal so all rows sum to zero.
 
-We now have a verb in our language for getting a rate matrix function:
+We now have a command in our language for getting a rate matrix function:
 
 ```{r}
-Q <- m %>% rate_matrix_function
+Q <- m %>% get_rate_matrix_function
 Q
 ```
 
@@ -233,6 +233,10 @@ The edge from `qux` to `foo`, where we substitute the value for `x` at the time 
 
 ## Traces
 
+An *observation* for a continuous time Markov chain is a *trace*—a sequence of states and at which time points we observe the states. In any real data analysis, we would probably write functions to obtain data from files, but since we are exploring domain-specific languages, let us write one for specifying traces. We will make traces depend on the CTMC we want use them with so we can test that the states in a trace are actually states in the CTMC. If you want to use several CTMCs to analyse the same trace, you could remove these tests, or you could make the trace object depend on a list of legal states instead of of a `ctmc` object.
+
+We take the same approach as for the `ctmc` class: we write a function for creating an object to represent traces, and we then have functions for adding information to a trace. The information we want to store in a trace is a list of states and a list of time points in which we observe the states. For the consistency checks between CTMC and trace, we will also store the nodes in the CTMC. The constructor for the trace class looks like this:
+
 ```{r}
 ctmc_trace <- function(ctmc) {
   nodes <- c(lst_to_list(ctmc$from), lst_to_list(ctmc$to)) %>%
@@ -240,7 +244,12 @@ ctmc_trace <- function(ctmc) {
   structure(list(nodes = nodes, states = NULL, at = NULL),
             class = "ctmc_trace")
 }
-start_state <- function(trace, state, at=0) {
+```
+
+We add a verbs to the language, a function adding observations of states at specific time points. This function mainly checks the consistency between states and the `ctmc` object and then add states and time points to the `ctmc_trace` object’s lists. 
+
+```{r}
+add_observation <- function(trace, state, at) {
   state <- enexpr(state)
   stopifnot(is_symbol(state))
   state <- as_string(state)
@@ -252,33 +261,33 @@ start_state <- function(trace, state, at=0) {
 
   trace
 }
-transition <- function(trace, at, to) {
-  stopifnot(is.numeric(at))
-  to <- enexpr(to)
-  stopifnot(is_symbol(to))
-  to <- as_string(to)
-  stopifnot(to %in% trace$nodes)
+```
 
-  trace$states <- cons(to, trace$states)
-  trace$at <- cons(at, trace$at)
+As for CTMC objects, we want a printing function for traces. Here, I will take a different approach than what we did for the `ctmc` print-function. I will translate traces into data frames—`tibble` objects, to be precise—and print the result. If I was writing a package for CTMCs, I might take a different approach, but I will use the transformation into data frames later, to compute likelihoods, so I exploit the transformation in the print function as well. To translate a `ctmc_trace` object into a `tibble` object, we specialise the `as_tibble` function. After that, we specialise the `print` function:
 
-  trace
-}
-
-print.ctmc_trace <- function(x, ...) {
+```{r}
+as_tibble.ctmc_trace <- function(x, ...) {
   states <- x$states %>% lst_to_list %>% unlist %>% rev
   at <- x$at %>% lst_to_list %>% unlist %>% rev
-  df <- tibble::tibble(state = states, at = at)
+  tibble::tibble(state = states, at = at)
+}
+print.ctmc_trace <- function(x, ...) {
+  df <- tibble::as_tibble(x)
+  cat("CTMC trace:\\n")
   print(df)
 }
+```
 
+We now have the functionality to create and print traces:
+
+```{r}
 tr <- ctmc_trace(m) %>%
-  start_state(foo) %>%
-  transition(0.1, bar) %>%
-  transition(0.3, baz) %>% 
-  transition(0.5, qux) %>%
-  transition(0.7, foo) %>%
-  transition(1.1, baz)
+  add_observation(foo, at = 0.0) %>%
+  add_observation(bar, at = 0.1) %>%
+  add_observation(baz, at = 0.3) %>% 
+  add_observation(qux, at = 0.5) %>%
+  add_observation(foo, at = 0.7) %>%
+  add_observation(baz, at = 1.1)
 tr
 ```
 
@@ -295,8 +304,8 @@ transition_probabilities <- function(Q, t) expm(Q * t)
 ```
 
 ```{r}
-likelihood_function <- function(ctmc, trace) {
-  rate_func <- ctmc %>% rate_matrix_function
+get_likelihood_function <- function(ctmc, trace) {
+  rate_func <- ctmc %>% get_rate_matrix_function
   trace_df <- tibble::as_tibble(trace)
   
   lhd_function <- function() {
@@ -320,7 +329,7 @@ likelihood_function <- function(ctmc, trace) {
   lhd_function
 }
 
-lhd <- m %>% likelihood_function(tr)
+lhd <- m %>% get_likelihood_function(tr)
 lhd(a = 2, b = 4)
 ```
 
