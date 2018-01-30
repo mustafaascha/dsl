@@ -9,7 +9,7 @@ test_pattern_rec <- function(escape, expr, test_expr, eval_env, match_env) {
       # Check if it is the right kind
       constructor <- as_string(test_expr[[1]])
       expr_constructor <- attr(expr, "constructor")
-      if (is_null(expr) || constructor != expr_constructor)
+      if (is_null(expr_constructor) || constructor != expr_constructor)
         escape(NULL) # wrong type
 
       # Now check recursively
@@ -26,7 +26,7 @@ test_pattern_rec <- function(escape, expr, test_expr, eval_env, match_env) {
   if (is_symbol(test_expr) && exists(as_string(test_expr), eval_env)) {
     constructor <- as_string(test_expr)
     val <- get(constructor, eval_env)
-    val_constructor <- attr(val, "constructor")
+    val_constructor <- attr(val, "constructor_constant")
     if (!is_null(val_constructor)) {
       expr_constructor <- attr(expr, "constructor")
       if (is_null(expr) || constructor != expr_constructor)

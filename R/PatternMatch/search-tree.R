@@ -1,16 +1,16 @@
 
-search_tree := E | T(value, left : search_tree, right : search_tree)
+search_tree := E | T(left : search_tree, value, right : search_tree)
 
 insert <- function(tree, x) {
   match(tree,
-        E -> T(x, E, E),
-        T(val, left, right) ->
+        E -> T(E, x, E),
+        T(left, val, right) ->
           if (x < val)
-            T(val, insert(left, x), right)
+            T(insert(left, x), val, right)
           else if (x > val)
-            T(val, left, insert(right, x))
+            T(left, val, insert(right, x))
           else
-            T(x, left, right)
+            T(left, x, right)
         )
 }
 
@@ -21,7 +21,7 @@ for (i in sample(2:4))
 member <- function(tree, x) {
   match(tree,
         E -> FALSE,
-        T(val, left, right) -> {
+        T(left, val, right) -> {
           if (x < val) member(left, x)
           else if (x > val) member(right, x)
           else TRUE

@@ -66,7 +66,9 @@ process_constructor_constant <- function(constructor, data_type_name, env) {
   stopifnot(is_symbol(constructor))
 
   constructor_name <- as_string(constructor)
-  constructor_object <- structure(NA, constructor = constructor_name, class = data_type_name)
+  constructor_object <- structure(NA,
+                                  constructor_constant = constructor_name,
+                                  class = data_type_name)
   assign(constructor_name, constructor_object, envir = env)
 }
 
