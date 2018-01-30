@@ -1,32 +1,48 @@
 
 test_pattern_rec <- function(escape, expr, test_expr, eval_env, match_env) {
-  constructor <- NULL
+
+  # Is this a function-constructor?
   if (is_lang(test_expr)) {
     func <- get(as_string(test_expr[[1]]), eval_env)
-    if ("constructor" %in% class(func))
+    if ("constructor" %in% class(func)) {
+      # This is a constructor.
+      # Check if it is the right kind
       constructor <- as_string(test_expr[[1]])
+      expr_constructor <- attr(expr, "constructor")
+      if (is_null(expr) || constructor != expr_constructor)
+        escape(NULL) # wrong type
+
+      # Now check recursively
+      for (i in seq_along(expr)) {
+        test_pattern_rec(escape, expr[[i]], test_expr[[i+1]], eval_env, match_env)
+      }
+
+      # If we get here, the matching was successfull
+      return(match_env)
+    }
   }
 
-  if (is_null(constructor)) {
-    # Not a constructor.
-    # Must be a value to compare with or a variable to bind to
-    if (is_symbol(test_expr)) {
-      assign(as_string(test_expr), expr, match_env)
-    } else {
-      value <- eval_tidy(test_expr, eval_env)
-      if (expr != value) escape(NULL)
+  # Is this a constant-constructor?
+  if (is_symbol(test_expr) && exists(as_string(test_expr), eval_env)) {
+    constructor <- as_string(test_expr)
+    val <- get(constructor, eval_env)
+    val_constructor <- attr(val, "constructor")
+    if (!is_null(val_constructor)) {
+      expr_constructor <- attr(expr, "constructor")
+      if (is_null(expr) || constructor != expr_constructor)
+        escape(NULL) # wrong type
+      else
+        return(match_env) # Successfull match
     }
+  }
 
+  # Not a constructor.
+  # Must be a value to compare with or a variable to bind to
+  if (is_symbol(test_expr)) {
+    assign(as_string(test_expr), expr, match_env)
   } else {
-    # This is a constructor.
-    # Check if it is the right kind
-    expr_constructor <- attr(expr, "constructor")
-    if (is_null(expr) || constructor != expr_constructor)
-      escape(NULL) # wrong type
-
-    for (i in seq_along(expr)) {
-      test_pattern_rec(escape, expr[[i]], test_expr[[i+1]], eval_env, match_env)
-    }
+    value <- eval_tidy(test_expr, eval_env)
+    if (expr != value) escape(NULL)
   }
 
   match_env
@@ -70,7 +86,8 @@ tree := T(left : tree, right : tree) | L(value : numeric)
 
 match(L(1),
       L(2) -> 12,
-      L(1) -> 11)
+      L(1) -> 11,
+      otherwise -> 13)
 
 
 matching <- function(expr)

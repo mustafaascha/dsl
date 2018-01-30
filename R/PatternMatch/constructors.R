@@ -11,17 +11,29 @@ library(rlang)
 
 process_arguments <- function(constructor_arguments) {
   process_arg <- function(argument) {
-    stopifnot(is.call(argument))
-    stopifnot(argument[[1]] == ":")
-    arg <- quo_name(argument[[2]])
-    type <- quo_name(argument[[3]])
-    tibble::tibble(arg = arg, type = type)
+    if (is_lang(argument)) {
+      stopifnot(argument[[1]] == ":")
+      arg <- quo_name(argument[[2]])
+      type <- quo_name(argument[[3]])
+      tibble::tibble(arg = arg, type = type)
+    } else {
+      arg <- quo_name(argument)
+      tibble::tibble(arg = arg, type = "any")
+    }
   }
   constructor_arguments %>% as.list %>% purrr::map(process_arg) %>% bind_rows
 }
 
 process_constructor <- function(constructor, data_type_name, env) {
+  if (is_lang(constructor))
+    process_constructor_function(constructor, data_type_name, env)
+  else
+    process_constructor_constant(constructor, data_type_name, env)
+}
+
+process_constructor_function <- function(constructor, data_type_name, env) {
   stopifnot(is.call(constructor))
+
   constructor_name <- quo_name(constructor[[1]])
   constructor_arguments <- process_arguments(constructor[-1])
 
@@ -34,12 +46,12 @@ process_constructor <- function(constructor, data_type_name, env) {
     for (i in seq_along(args)) {
       arg <- args[[constructor_arguments$arg[i]]]
       type <- constructor_arguments$type[i]
-      stopifnot(type %in% class(arg))
+      stopifnot(type == "any" || type %in% class(arg))
     }
 
-     structure(args,
-               constructor = constructor_name,
-               class = data_type_name)
+    structure(args,
+              constructor = constructor_name,
+              class = data_type_name)
   }
   formals(constructor) <- make_args_list(constructor_arguments$arg)
 
@@ -50,9 +62,16 @@ process_constructor <- function(constructor, data_type_name, env) {
   assign(constructor_name, constructor, envir = env)
 }
 
+process_constructor_constant <- function(constructor, data_type_name, env) {
+  stopifnot(is_symbol(constructor))
+
+  constructor_name <- as_string(constructor)
+  constructor_object <- structure(NA, constructor = constructor_name, class = data_type_name)
+  assign(constructor_name, constructor_object, envir = env)
+}
+
 process_alternatives <- function(constructors, data_type_name, env) {
-  stopifnot(is.call(constructors))
-  if (constructors[[1]] == "|") {
+  if (is_lang(constructors) && constructors[[1]] == "|") {
     process_alternatives(constructors[[2]], data_type_name, env)
     process_alternatives(constructors[[3]], data_type_name, env)
   } else {
@@ -67,15 +86,20 @@ deparse_construction <- function(object) {
     return(as.character(object))
   }
 
-  components <- names(object)
-  values <- as_list(object) %>% purrr::map(deparse_construction)
+  if (is_list(object)) {
+    components <- names(object)
+    values <- as_list(object) %>% purrr::map(deparse_construction)
 
-  print_args <- vector("character", length = length(components))
-  for (i in seq_along(components)) {
-    print_args[i] <- paste0(components[i], " = ", values[i])
+    print_args <- vector("character", length = length(components))
+    for (i in seq_along(components)) {
+      print_args[i] <- paste0(components[i], " = ", values[i])
+    }
+    print_args <- paste0(print_args, collapse = ", ")
+    paste0(constructor_name, "(", print_args, ")")
+
+  } else {
+    constructor_name
   }
-
-  paste0(constructor_name, "(", print_args, ")", collapse = ", ")
 }
 construction_printer <- function(x, ...) {
   cat(deparse_construction(x), "\n")
@@ -102,4 +126,9 @@ x
 x$left$left$value
 x$left$right$value
 x$right$value
+
+L(1L)
+
+tree := T(left : tree, right : tree) | L(value)
+L(1L)
 
