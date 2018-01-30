@@ -14,10 +14,6 @@ insert <- function(tree, x) {
         )
 }
 
-tree <- E
-for (i in sample(2:4))
-  tree <- insert(tree, i)
-
 member <- function(tree, x) {
   match(tree,
         E -> FALSE,
@@ -27,6 +23,10 @@ member <- function(tree, x) {
           else TRUE
         })
 }
+
+tree <- E
+for (i in sample(2:4))
+  tree <- insert(tree, i)
 
 for (i in 1:6) {
   cat(i, " : ", member(tree, i), "\n")

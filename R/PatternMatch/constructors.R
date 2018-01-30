@@ -8,6 +8,8 @@ make_args_list <- function(args) {
 
 
 library(rlang)
+library(magrittr)
+library(dplyr)
 
 process_arguments <- function(constructor_arguments) {
   process_arg <- function(argument) {
