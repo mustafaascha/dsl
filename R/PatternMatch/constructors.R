@@ -27,11 +27,19 @@ process_constructor <- function(constructor, data_type_name, env) {
 
   # create the constructor function
   constructor <- function() {
-    object <- structure(as_list(environment()),
-                        constructor = constructor_name,
-                        class = data_type_name)
-    # FIXME: type check!
-    object
+    args <- as_list(environment())
+
+    # type check!
+    stopifnot(length(args) == length(constructor_arguments$arg))
+    for (i in seq_along(args)) {
+      arg <- args[[constructor_arguments$arg[i]]]
+      type <- constructor_arguments$type[i]
+      stopifnot(type %in% class(arg))
+    }
+
+     structure(args,
+               constructor = constructor_name,
+               class = data_type_name)
   }
   formals(constructor) <- make_args_list(constructor_arguments$arg)
 
