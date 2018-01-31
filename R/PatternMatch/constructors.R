@@ -48,7 +48,7 @@ process_constructor_function <- function(constructor, data_type_name, env) {
     for (i in seq_along(args)) {
       arg <- args[[constructor_arguments$arg[i]]]
       type <- constructor_arguments$type[i]
-      stopifnot(type == "any" || type %in% class(arg))
+      stopifnot(type == "any" || inherits(arg, type))
     }
 
     structure(args,
@@ -87,7 +87,7 @@ deparse_construction <- function(object) {
   constructor_name <- attr(object, "constructor")
   if (is_null(constructor_name)) {
     # this is not a constructor, so just get the value
-    return(as.character(object))
+    return(toString(object))
   }
 
   if (is_list(object)) {
@@ -118,6 +118,7 @@ construction_printer <- function(x, ...) {
 
   c(data_type_name, constructors)
   process_alternatives(constructors, data_type_name, get_env(data_type))
+  assign(paste0("toString.", data_type_name), deparse_construction, envir = get_env(data_type))
   assign(paste0("print.", data_type_name), construction_printer, envir = get_env(data_type))
 }
 
@@ -131,8 +132,6 @@ x$left$left$value
 x$left$right$value
 x$right$value
 
-L(1L)
+search_tree := E | T(left : search_tree, value, right : search_tree)
 
-tree := T(left : tree, right : tree) | L(value)
-L(1L)
-
+T(E, quote(x + y + z), E)

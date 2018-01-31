@@ -65,12 +65,14 @@ The construction function will expect a type name as its left-hand-side paramete
     get_env(data_type)
   )
 
+  assign(paste0("toString.", data_type_name),
+         deparse_construction, envir = get_env(data_type))
   assign(paste0("print.", data_type_name),
          construction_printer, envir = get_env(data_type))
 }
 ```
 
-The last statement in this function, the call to `assign`, creates a function for printing elements of the type we are creating. The `construction_printer` function is a function that we define below. It extracts information about values from meta-information we will store in objects of the new type and we can use the same function for all types we define in our language. We use it to specialise the `print` function for this specific type. The `paste0("print.", data_type_name)` call creates the name of the specialisation of the generic `print` and the `assign` function then stores `construction_printer` under that name in the environment we get from `get_env(data_type)`, i.e., the environment where we define the type.
+The last two statements in this function, the calls to `assign`, creates functions for printing elements of the type we are creating. We will implement the `deparse_construction` and `construction_printer` functions below. They extract information about values from meta-information we will store in objects of the new type and we can use the same functions for all types we define in our language. We use them to specialise the `toString` and `print` functions for this specific type. The `paste0` calls creates the names of the specialisations of the generic `toString` and `print` functions and the `assign` function then stores `deparse_construction` and `construction_printer` under the appropriate names in the environment we get from `get_env(data_type)`, i.e., the environment where we define the type.
 
 The expression on the right-hand side of `:=` defines how we construct elements of the new type. We allow there to be more than one way to do this, and we separate the various choices using the or-operator `|`. This resembles how we show different alternatives when we specify a grammar, so it is a natural choice. To process the right-hand side, we use the function `process_alternatives`.
 
@@ -141,7 +143,7 @@ process_constructor_constant <- function(constructor,
 }
 ```
 
-
+For the function constructors we need to create, you guessed it, functions. We analyse the arguments given to the constructor specification and build a function out of that, and this function we then store in the environment where the constructor is defined. We permit two kinds of parameters to a constructor: either a symbol or a symbol with a type. For the latter, we use the `:` operator. If a parameter is a `:` call, then we consider the left-hand side the parameter and the right-hand side the type. We use the types to guarantee that values we construct are of the expected kind. If there is not type specified, we will allow a parameter to hold any value. We use the following function to translate the list of parameters from a function constructor expression into a data frame where the first column holds the argument names and the second column holds their type. We use `NA` to indicate that we allow any type. The function works by first translating the arguments—that are in the form of a `call` object—into a list. We have to use the base `as.list` function for this, rather than the `rlang` `as_list`, since the latter will not translate `call` objects into lists. Once we have the arguments as a list, we map the `process_arg` function over the elements. This function creates a row for the data frame per element, and we combine the rows using the `bind_rows` function from `dplyr`.
 
 ```{r}
 process_arguments <- function(constructor_arguments) {
@@ -153,28 +155,40 @@ process_arguments <- function(constructor_arguments) {
       tibble::tibble(arg = arg, type = type)
     } else {
       arg <- quo_name(argument)
-      tibble::tibble(arg = arg, type = "any")
+      tibble::tibble(arg = arg, type = NA)
     }
   }
-  constructor_arguments %>% as.list %>% purrr::map(process_arg) %>% bind_rows
+  constructor_arguments %>% 
+    as.list %>% 
+    purrr::map(process_arg) %>%   
+    bind_rows
 }
+```
 
-process_constructor_function <- function(constructor, data_type_name, env) {
-  stopifnot(is.call(constructor))
+The `process_constructor_function` translates a function construction specification into a function. The first element of the specifications, which is a `call` object, is the name of the function. The remaining elements, we translate into a data frame using the function we just saw. After that, we need to create the function that will work as the constructor. Here, we create a closure without arguments and then add formal parameters afterwards, as we did in the previous chapter, and we get the actual parameters the closure is called with using the `as_list(environment())` trick.
 
+The value we return from the closure is just the list of arguments that are provided to it, but tagged with a `constructor` attribute we can use for pattern matching and a `class` set to the type we are defining, something we use for type checking. The type checking is the main part of the constructor. Here, we check that we get the right number of arguments and that they have the right type if a type was specified.
+
+Once we have created the closure and set its formal arguments we also update its class so it is both a `constructor` and a `function`. This is also something we will need when pattern matching. Then we assign it to the environment associated with the specification to make it available to the programmer.
+
+```{r}
+process_constructor_function <- function(constructor,
+                                         data_type_name,
+                                         env) {
+  stopifnot(is_lang(constructor))
   constructor_name <- quo_name(constructor[[1]])
   constructor_arguments <- process_arguments(constructor[-1])
 
-  # create the constructor function
+  # Create the constructor function
   constructor <- function() {
     args <- as_list(environment())
 
-    # type check!
+    # Type check!
     stopifnot(length(args) == length(constructor_arguments$arg))
     for (i in seq_along(args)) {
       arg <- args[[constructor_arguments$arg[i]]]
       type <- constructor_arguments$type[i]
-      stopifnot(type == "any" || type %in% class(arg))
+      stopifnot(is_na(type) || inherits(arg, type))
     }
 
     structure(args,
@@ -183,20 +197,26 @@ process_constructor_function <- function(constructor, data_type_name, env) {
   }
   formals(constructor) <- make_args_list(constructor_arguments$arg)
 
-  # set meta information about the constructor
+  # Set meta information about the constructor
   class(constructor) <- c("constructor", "function")
 
-  # put the constructor in the binding scope
+  # Put the constructor in the binding scope
   assign(constructor_name, constructor, envir = env)
 }
 ```
+
+The only remaining function to write for the constructors is the function for printing them. Here, we write a function that translate a constructed object into a string; this function we can then use recursively to translate any constructed element into a string. We then simply call this function in `construction_printer` which is the function that is assigned to the specialised `print` function for any type we define.
+
+There is nothing complicated in the function. We first check if the object has an attribute “constructor”. Strictly speaking, only the function constructors have this—the constant constructors have the attribute “constructor_constant”, but the `attire` function will pick an attribute if it gets a unique prefix, so we also get that. If we do not have a “constructor” attribute, then it isn’t an element constructed from something we have defined from our language, so it must be a value of some other type—we just convert it into a string and return this. We use the generic `toString` function for this. This function converts any object into a string. Not necessarily a pretty representation of the object, but you can specialise it if you need to.
+
+If the object we have *is* a constructor, it is either a constant or the result of a constructor function call. If the latter, it will be a list. If it is a list, then we must convert all the elements in the list into strings and paste them together. Otherwise, the name of the constructor is the string representation of the object.
 
 ```{r}
 deparse_construction <- function(object) {
   constructor_name <- attr(object, "constructor")
   if (is_null(constructor_name)) {
-    # this is not a constructor, so just get the value
-    return(as.character(object))
+    # This is not a constructor, so just get the value
+    return(toString(object))
   }
 
   if (is_list(object)) {
@@ -205,7 +225,7 @@ deparse_construction <- function(object) {
 
     print_args <- vector("character", length = length(components))
     for (i in seq_along(components)) {
-      print_args[i] <- paste0(components[i], " = ", values[i])
+      print_args[i] <- paste0(components[i], "=", values[i])
     }
     print_args <- paste0(print_args, collapse = ", ")
     paste0(constructor_name, "(", print_args, ")")
@@ -219,25 +239,41 @@ construction_printer <- function(x, ...) {
 }
 ```
 
+As an example of using the construction language we can define a binary tree as either a tree with a left and right sub-tree or a leaf:
+
 ```{r}
 tree := T(left : tree, right : tree) | L(value : numeric)
+```
 
+We can use the constructors to create a tree:
+
+```{r}
 x <- T(T(L(1),L(2)),L(3))
 x
+```
 
+Values we create using these constructors can be accessed just as lists—which, in fact, they are—using the variable names we used in the type specification:
+
+```{r}
 x$left$left$value
 x$left$right$value
 x$right$value
 ```
 
+The type checking is rather strict, however. We demand that the values we pass to the constructor functions are of the types we give in the specification—in the sense that they must inherit the class from the specification—and this can be a problem in some cases where R would otherwise normally just convert values. In the specification for the `L` constructor, for example, we require that the argument is `numeric`. We will get an error if we give it an `inter`:
+
 ```{r}
 L(1L)
 ```
+
+This is where we can use the variant of parameters without a type:
 
 ```{r}
 tree := T(left : tree, right : tree) | L(value)
 L(1L)
 ```
+
+An alternative solution could be to specify more than one type in the specification. If you are interested, you can play with that. I will just leave it here and move on to pattern matching.
 
 ## Pattern matching
 
@@ -462,7 +498,7 @@ member <- function(tree, x) {
 
 tree <- T(R, E, 2, T(B, E, 5, E))
 for (i in 1:6) {
-  cat(i, " : ", member(tree, i), "\n")
+  cat(i, " : ", member(tree, i), "\\n")
 }
 
 insert_rec <- function(tree, x) {
