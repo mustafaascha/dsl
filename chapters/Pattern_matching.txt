@@ -456,7 +456,7 @@ linked_list := NIL | CONS(car, cdr : linked_list)
 
 A list is either empty, we use the constant `NIL` to represent that, or it has a head element, `car`, and a tail, `cdr`. Since we implement values we construct from our language as `list` objects, we automatically get the linked-list implementation form this specification.
 
-
+With pattern matching, we can write very simple functions for manipulating lists. For example, the following function reverses a list using an accumulator list. In the base case, when the first list is empty, we return the accumulated, otherwise we take the head of the list and prepend it to the accumulated and then recurse. We `force` evaluation of the accumulator to avoid lazy evaluation. With lazy evaluation, we would be building larger and later `CONS` expressions that would not be evaluated until the end of the recursion, at which point we might have built the expression too later for the stack space needed to evaluate the functions (see e.g. [@Mailund:2017ii] and [@Mailund:2017ul] for explanations of how recursion and lazy evaluation can interfere).
 
 ```{r}
 reverse_list <- function(lst, acc = NIL) {
@@ -465,14 +465,22 @@ reverse_list <- function(lst, acc = NIL) {
         NIL -> acc,
         CONS(car, cdr) -> reverse_list(cdr, CONS(car, acc)))
 }
+```
 
+We can write a very similar function to compute the length of a list. This will follow the same pattern of using an accumulator, which we return in the base case and update in the recursive case.
+
+```{r}
 list_length <- function(lst, acc = 0) {
   force(acc)
   match(lst,
         NIL -> acc,
         CONS(car, cdr) -> list_length(cdr, acc + 1))
 }
+```
 
+A function for translating a linked list into a `list` object is a little more involved, but can still be written succinctly using pattern matching. We need to figure out the length of the `list` object first, then allocate it, and finally iterate through the linked list to update the `list`. We use a closure, `f`, to recursively traverse the linked list. In the base case I return `NULL`. It doesn’t matter what we return here since we only do the recursion for its side-effects, which are handled in the recursive case. Here, I use a code block—the curly-braces operator—to evaluate two statements. The first update the list `v` and the second continue the recursion. It is exactly because we use tidy evaluation that this function works. It is essential that the assignment we do in the recursive case is evaluated in the environment where we write the expression. Otherwise, we would not be updating the correct list.
+
+```{r}
 list_to_vector <- function(lst) {
   n <- list_length(lst)
   v <- vector("list", length = n)
@@ -489,7 +497,11 @@ list_to_vector <- function(lst) {
   f(lst, 1)
   v %>% unlist
 }
+```
 
+Translating a `list` to a linked list is simple enough and doesn’t use any pattern matching—we cannot pattern match on `list` objects, after all.
+
+```{t}
 vector_to_list <- function(vec) {
   lst <- NIL
   for (i in seq_along(vec)) {
@@ -497,12 +509,18 @@ vector_to_list <- function(vec) {
   }
   reverse_list(lst)
 }
+```
 
+With these few functions we can translate to and from vectors and work with lists. 
+
+```{r}
 lst <- vector_to_list(1:5)
 list_length(lst)
 list_to_vector(lst)
 lst %>% reverse_list %>% list_to_vector
 ```
+
+Extending the functionality of linked lists with additional function I will leave as an exercise to the interested reader. You can experiment to your hearts desire.
 
 ## Search trees
 
