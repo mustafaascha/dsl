@@ -578,15 +578,25 @@ for (i in 1:6) {
 }
 ```
 
+The worst-case time usage for both of these functions is proportional to the depth of the tree, and that can be linear in the number of elements stored in the tree. If we keep the tree balanced, though, the time is reduced to logarithmic in the size of the tree. A classical data structure for keeping search trees balanced is so-called *red-black* search trees. Implementing these using pointer or reference manipulation in languages such as C/C++ or Java can be quite challenging, but in a functional language, balancing such trees is a simple matter of transforming trees based on local structure, see e.g. @Okasaki:1999fd, @Germane:2014et, or @Mailund:2017ul.
 
+Red-black search trees are binary search trees where each tree has a colour associated, either red or black. We can define colours using constructors like this:
 
 ```{r}
 colour :=
   R | B
+```
+
+We add a colour to all non-empty trees like this:
+
+```{r}
 rb_tree :=
   E | T(col : colour, left : rb_tree, value, right : rb_tree)
+```
 
+Except for including the colour in the pattern matching, the `member` function for this data structure is the same as for the plain search tree.
 
+```{r}
 member <- function(tree, x) {
   match(tree,
         E -> FALSE,
@@ -601,7 +611,18 @@ tree <- T(R, E, 2, T(B, E, 5, E))
 for (i in 1:6) {
   cat(i, " : ", member(tree, i), "\\n")
 }
+```
 
+What keeps red-black search trees balanced is that we always enforce these two invariants:
+
+1. No red node has a red parent.
+2. Every path from the root to a leaf has the same number of black nodes.
+
+If every path from root to a leaf have the same number of black nodes, then the tree is perfectly balanced if we ignored the red nodes. Since no red node has a red parent, the longest path, when red nodes are considered, can be no longer than twice the length of the shortest path.
+
+These invariants can be guaranteed by always inserting new values in red leaves, potentially invalidating the first invariant, and then rebalancing all sub-trees that invalidate this invariant, and at the end setting the root to be black. The rebalancing is done when returning from the recursive insertion calls that otherwise work as insertion in the plain search tree.
+
+```{r}
 insert_rec <- function(tree, x) {
   match(tree,
         E -> T(R, E, x, E),
@@ -619,7 +640,13 @@ insert <- function(tree, x) {
   tree$col <- B
   tree
 }
+```
 
+The transformation rules for the `balance` function are shown in [@fig:RBT-transformations]. Whenever we see any of the four trees on the edges, we have to transform it into the one in the middle. The implementation I presented in @Mailund:2017ul contained mostly code for testing the structure of the tree to match and very little to construct the modified tree. With pattern matching, we can implement these rules by matching for each of the four cases like this:
+
+![Re-balancing transformations when inserting into a red-black search tree.](figures/RBT-transformations){#fig:RBT-transformations}
+
+```{r}
 balance <- function(tree) {
   match(tree,
         T(B,T(R,a,x,T(R,b,y,c)),z,d) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
@@ -628,14 +655,6 @@ balance <- function(tree) {
         T(B,a,x,T(R,T(R,b,y,c),z,d)) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
         otherwise -> tree)
 }
-
-tree <- E
-for (i in sample(2:4))
-  tree <- insert(tree, i)
-for (i in 1:6) {
-  cat(i, " : ", member(tree, i), "\\n")
-}
-
-tree <- T(B, T(R, E, 0, T(R, E, 1, E)), 2, E)
-balance(tree)
 ```
+
+This is the function we used to motivate the domain-specific language, and so we come full circle, having implemented the language we wanted.
