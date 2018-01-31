@@ -501,7 +501,7 @@ list_to_vector <- function(lst) {
 
 Translating a `list` to a linked list is simple enough and doesn’t use any pattern matching—we cannot pattern match on `list` objects, after all.
 
-```{t}
+```{r}
 vector_to_list <- function(vec) {
   lst <- NIL
   for (i in seq_along(vec)) {
