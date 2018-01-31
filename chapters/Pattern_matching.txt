@@ -34,7 +34,19 @@ library(magrittr)
 library(dplyr)
 ```
 
+We will also need the `make_args_list` function we defined in [Chapter @sec:lambda].
+
+```{r}
+make_args_list <- function(args) {
+  res <- replicate(length(args), substitute())
+  names(res) <- args
+  as.pairlist(res)
+}
+```
+
 ## Constructors
+
+The first construction we must implement is for defining data types.
 
 ```{r}
 process_arguments <- function(constructor_arguments) {
@@ -132,7 +144,7 @@ deparse_construction <- function(object) {
   }
 }
 construction_printer <- function(x, ...) {
-  cat(deparse_construction(x), "\n")
+  cat(deparse_construction(x), "\\n")
 }
 
 `:=` <- function(data_type, constructors) {
@@ -320,7 +332,7 @@ for (i in sample(2:4))
   tree <- insert(tree, i)
 
 for (i in 1:6) {
-  cat(i, " : ", member(tree, i), "\n")
+  cat(i, " : ", member(tree, i), "\\n")
 }
 ```
 
@@ -375,7 +387,7 @@ tree <- E
 for (i in sample(2:4))
   tree <- insert(tree, i)
 for (i in 1:6) {
-  cat(i, " : ", member(tree, i), "\n")
+  cat(i, " : ", member(tree, i), "\\n")
 }
 
 tree <- T(B, T(R, E, 0, T(R, E, 1, E)), 2, E)

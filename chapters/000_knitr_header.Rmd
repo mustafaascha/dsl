@@ -5,6 +5,7 @@ suppressPackageStartupMessages(library(rlang, quietly = TRUE))
 suppressPackageStartupMessages(library(microbenchmark, quietly = TRUE))
 suppressPackageStartupMessages(library(magrittr, quietly = TRUE))
 suppressPackageStartupMessages(library(purrr, quietly = TRUE))
+suppressPackageStartupMessages(library(dplyr, quietly = TRUE))
 
 assert <- function(expr, expected) {
 	if (!expr) stop(paste0("ERROR: ", expr))

@@ -1,4 +1,4 @@
-# Lambda expressions
+# Lambda expressions {#sec:lambda}
 
 With the techniques we have seen so far, we are now able to implement some useful domain-specific languages. In this chapter, we examine a toy example, lambda-expressions, something we would probably not use in real-world code, but which is an excellent example of code doing something potentially useful and a chance for us to experiment with syntax.
 
