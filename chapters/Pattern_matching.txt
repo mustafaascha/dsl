@@ -1,2 +1,383 @@
 # Pattern matching
 
+In languages such as ML or Haskell, you can define data types by specifying functions you will use to construct values of any given type. In itself, that is not that interesting, but combined with a pattern matching feature of these languages, you can write very succinct functions for transforming data structures.
+
+In my book on *Functional Data Structures in R* **FIXME: REF**, I describe several algorithms that depend on transformation of various trees based on their structure. This involves figuring out the current structure of a tree—does it have a left sub-tree? Is that tree a leaf? If it is a red-black search tree, what is the colour of the tree? And the colour of its right sub-tree? In the algorithms I presented in that book, most of the functions contained tens of lines of code just for matching such tree structure.
+
+With the language we implement in this chapter, we will make writing such transformation functions vastly more efficient. We will write two main constructions. The first for defining a data structure, which we can use to define red-black search trees like this:
+
+```r
+colour := R | B
+rb_tree := E | T(col : colour, left : rb_tree, value, right : rb_tree)
+```
+
+The second constructing is used to match values of such types and then perform actions accordingly. A balancing function for red-black search trees can be succinctly implemented like this:
+
+```r
+balance <- function(tree) {
+  match(tree,
+        T(B, T(R, a, x, T(R, b, y, c)), z, d) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        T(B, T(R, T(R, a, x, b), y, c), z, d) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        T(B, a, x, T(R, b, y, T(R, c, z, d))) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        T(B, a, x, T(R, T(R, b, y, c), z, d)) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        otherwise -> tree)
+}
+```
+
+This function is mere eight lines, compared to the 42 lines of code used in *Functional Data Structures in R*, where I also use some pattern matching tricks but not a domain-specific language especially designed for it. Such a language is what we will implement in this chapter.
+
+For the chapter, we need to will use the following packages:
+
+```r
+library(rlang)
+library(magrittr)
+library(dplyr)
+```
+
+## Constructors
+
+```{r}
+process_arguments <- function(constructor_arguments) {
+  process_arg <- function(argument) {
+    if (is_lang(argument)) {
+      stopifnot(argument[[1]] == ":")
+      arg <- quo_name(argument[[2]])
+      type <- quo_name(argument[[3]])
+      tibble::tibble(arg = arg, type = type)
+    } else {
+      arg <- quo_name(argument)
+      tibble::tibble(arg = arg, type = "any")
+    }
+  }
+  constructor_arguments %>% as.list %>% purrr::map(process_arg) %>% bind_rows
+}
+
+process_constructor <- function(constructor, data_type_name, env) {
+  if (is_lang(constructor))
+    process_constructor_function(constructor, data_type_name, env)
+  else
+    process_constructor_constant(constructor, data_type_name, env)
+}
+
+process_constructor_function <- function(constructor, data_type_name, env) {
+  stopifnot(is.call(constructor))
+
+  constructor_name <- quo_name(constructor[[1]])
+  constructor_arguments <- process_arguments(constructor[-1])
+
+  # create the constructor function
+  constructor <- function() {
+    args <- as_list(environment())
+
+    # type check!
+    stopifnot(length(args) == length(constructor_arguments$arg))
+    for (i in seq_along(args)) {
+      arg <- args[[constructor_arguments$arg[i]]]
+      type <- constructor_arguments$type[i]
+      stopifnot(type == "any" || type %in% class(arg))
+    }
+
+    structure(args,
+              constructor = constructor_name,
+              class = data_type_name)
+  }
+  formals(constructor) <- make_args_list(constructor_arguments$arg)
+
+  # set meta information about the constructor
+  class(constructor) <- c("constructor", "function")
+
+  # put the constructor in the binding scope
+  assign(constructor_name, constructor, envir = env)
+}
+
+process_constructor_constant <- function(constructor, data_type_name, env) {
+  stopifnot(is_symbol(constructor))
+
+  constructor_name <- as_string(constructor)
+  constructor_object <- structure(NA,
+                                  constructor_constant = constructor_name,
+                                  class = data_type_name)
+  assign(constructor_name, constructor_object, envir = env)
+}
+
+process_alternatives <- function(constructors, data_type_name, env) {
+  if (is_lang(constructors) && constructors[[1]] == "|") {
+    process_alternatives(constructors[[2]], data_type_name, env)
+    process_alternatives(constructors[[3]], data_type_name, env)
+  } else {
+    process_constructor(constructors, data_type_name, env)
+  }
+}
+
+deparse_construction <- function(object) {
+  constructor_name <- attr(object, "constructor")
+  if (is_null(constructor_name)) {
+    # this is not a constructor, so just get the value
+    return(as.character(object))
+  }
+
+  if (is_list(object)) {
+    components <- names(object)
+    values <- as_list(object) %>% purrr::map(deparse_construction)
+
+    print_args <- vector("character", length = length(components))
+    for (i in seq_along(components)) {
+      print_args[i] <- paste0(components[i], " = ", values[i])
+    }
+    print_args <- paste0(print_args, collapse = ", ")
+    paste0(constructor_name, "(", print_args, ")")
+
+  } else {
+    constructor_name
+  }
+}
+construction_printer <- function(x, ...) {
+  cat(deparse_construction(x), "\n")
+}
+
+`:=` <- function(data_type, constructors) {
+  data_type <- enquo(data_type)
+  constructors <- enexpr(constructors)
+
+  stopifnot(quo_is_symbol(data_type))
+  data_type_name <- quo_name(data_type)
+
+  c(data_type_name, constructors)
+  process_alternatives(constructors, data_type_name, get_env(data_type))
+  assign(paste0("print.", data_type_name), construction_printer, envir = get_env(data_type))
+}
+
+
+tree := T(left : tree, right : tree) | L(value : numeric)
+
+x <- T(T(L(1),L(2)),L(3))
+x
+
+x$left$left$value
+x$left$right$value
+x$right$value
+```
+
+```{r}
+L(1L)
+```
+
+```{r}
+tree := T(left : tree, right : tree) | L(value)
+L(1L)
+```
+
+## Pattern matching
+
+```{r}
+
+test_pattern_rec <- function(escape, expr, test_expr, eval_env, match_env) {
+
+  # Is this a function-constructor?
+  if (is_lang(test_expr)) {
+    func <- get(as_string(test_expr[[1]]), eval_env)
+    if ("constructor" %in% class(func)) {
+      # This is a constructor.
+      # Check if it is the right kind
+      constructor <- as_string(test_expr[[1]])
+      expr_constructor <- attr(expr, "constructor")
+      if (is_null(expr_constructor) || constructor != expr_constructor)
+        escape(NULL) # wrong type
+
+      # Now check recursively
+      for (i in seq_along(expr)) {
+        test_pattern_rec(escape, expr[[i]], test_expr[[i+1]], eval_env, match_env)
+      }
+
+      # If we get here, the matching was successfull
+      return(match_env)
+    }
+  }
+
+  # Is this a constant-constructor?
+  if (is_symbol(test_expr) && exists(as_string(test_expr), eval_env)) {
+    constructor <- as_string(test_expr)
+    val <- get(constructor, eval_env)
+    val_constructor <- attr(val, "constructor_constant")
+    if (!is_null(val_constructor)) {
+      expr_constructor <- attr(expr, "constructor")
+      if (is_null(expr) || constructor != expr_constructor)
+        escape(NULL) # wrong type
+      else
+        return(match_env) # Successfull match
+    }
+  }
+
+  # Not a constructor.
+  # Must be a value to compare with or a variable to bind to
+  if (is_symbol(test_expr)) {
+    assign(as_string(test_expr), expr, match_env)
+  } else {
+    value <- eval_tidy(test_expr, eval_env)
+    if (expr != value) escape(NULL)
+  }
+
+  match_env
+}
+
+test_pattern <- function(expr, test_expr, eval_env) {
+  # Environment in which to store matched variables
+  match_env <- env()
+
+  if (test_expr == quote(otherwise))
+    return(match_env)
+
+  # Test pattern
+  tester <- function(escape)
+    test_pattern_rec(escape, expr, test_expr, eval_env, match_env)
+  callCC(tester)
+}
+
+match <- function(expr, ...) {
+  matchings <- quos(...)
+  matchings[[1]]
+
+  for (i in seq_along(matchings)) {
+    eval_env <- get_env(matchings[[i]])
+    match_expr <- quo_expr(matchings[[i]])
+    stopifnot(match_expr[[1]] == "<-")
+
+    test_expr <- match_expr[[3]]
+    result_expr <- match_expr[[2]]
+
+    match <- test_pattern(expr, test_expr, eval_env)
+    if (!is_null(match))
+      return(eval_tidy(result_expr, data = match, env = eval_env))
+  }
+
+  stop("No matching pattern!")
+}
+
+
+tree := T(left : tree, right : tree) | L(value : numeric)
+
+match(L(1),
+      L(2) -> 12,
+      L(1) -> 11,
+      otherwise -> 13)
+
+
+matching <- function(expr)
+  match(expr,
+        L(v) -> v,
+        T(L(v), L(w)) -> v + w,
+        otherwise -> 5)
+
+matching(L(1))
+matching(T(L(4), L(5)))
+matching(T(L(1), T(L(4), L(5))))
+
+dfs <- function(tree) {
+  match(tree,
+        L(v) -> v,
+        T(left, right) -> dfs(left) + dfs(right))
+}
+
+dfs(L(1))
+dfs(T(L(1),L(2)))
+
+x <- T(T(L(1),L(2)),L(3))
+dfs(x)
+```
+
+## Lists
+
+## Search trees
+
+```{r}
+search_tree := E | T(left : search_tree, value, right : search_tree)
+
+insert <- function(tree, x) {
+  match(tree,
+        E -> T(E, x, E),
+        T(left, val, right) ->
+          if (x < val)
+            T(insert(left, x), val, right)
+          else if (x > val)
+            T(left, val, insert(right, x))
+          else
+            T(left, x, right)
+        )
+}
+
+member <- function(tree, x) {
+  match(tree,
+        E -> FALSE,
+        T(left, val, right) -> {
+          if (x < val) member(left, x)
+          else if (x > val) member(right, x)
+          else TRUE
+        })
+}
+
+tree <- E
+for (i in sample(2:4))
+  tree <- insert(tree, i)
+
+for (i in 1:6) {
+  cat(i, " : ", member(tree, i), "\n")
+}
+```
+
+```{r}
+colour := R | B
+rb_tree := E | T(col : colour, left : rb_tree, value, right : rb_tree)
+
+
+member <- function(tree, x) {
+  match(tree,
+        E -> FALSE,
+        T(col, left, val, right) -> {
+          if (x < val) member(left, x)
+          else if (x > val) member(right, x)
+          else TRUE
+        })
+}
+
+tree <- T(R, E, 2, T(B, E, 5, E))
+for (i in 1:6) {
+  cat(i, " : ", member(tree, i), "\n")
+}
+
+insert_rec <- function(tree, x) {
+  match(tree,
+        E -> T(R, E, x, E),
+        T(col, left, val, right) -> {
+          if (x < val)
+            balance(T(col, insert_rec(left, x), val, right))
+          else if (x > val)
+            balance(T(col, left, val, insert_rec(right, x)))
+          else
+            T(col, left, x, right) # already here
+        })
+}
+insert <- function(tree, x) {
+  tree <- insert_rec(tree, x)
+  tree$col <- B
+  tree
+}
+
+balance <- function(tree) {
+  match(tree,
+        T(B, T(R, a, x, T(R, b, y, c)), z, d) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        T(B, T(R, T(R, a, x, b), y, c), z, d) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        T(B, a, x, T(R, b, y, T(R, c, z, d))) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        T(B, a, x, T(R, T(R, b, y, c), z, d)) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        otherwise -> tree)
+}
+
+tree <- E
+for (i in sample(2:4))
+  tree <- insert(tree, i)
+for (i in 1:6) {
+  cat(i, " : ", member(tree, i), "\n")
+}
+
+tree <- T(B, T(R, E, 0, T(R, E, 1, E)), 2, E)
+balance(tree)
+```
