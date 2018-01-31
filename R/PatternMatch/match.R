@@ -90,15 +90,21 @@ match(L(1),
       otherwise -> 13)
 
 
-matching <- function(expr)
-  match(expr,
-        L(v) -> v,
-        T(L(v), L(w)) -> v + w,
-        otherwise -> 5)
+match(L(1),
+      L(v) -> v,
+      T(L(v), L(w)) -> v + w,
+      otherwise -> 5)
 
-matching(L(1))
-matching(T(L(4), L(5)))
-matching(T(L(1), T(L(4), L(5))))
+match(T(L(4), L(5)),
+      L(v) -> v,
+      T(L(v), L(w)) -> v + w,
+      otherwise -> 5)
+
+match(T(L(1), T(L(4), L(5))),
+      L(v) -> v,
+      T(L(v), L(w)) -> v + w,
+      otherwise -> 5)
+
 
 dfs <- function(tree) {
   match(tree,

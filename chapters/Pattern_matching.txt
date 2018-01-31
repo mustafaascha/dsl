@@ -260,7 +260,7 @@ x$left$right$value
 x$right$value
 ```
 
-The type checking is rather strict, however. We demand that the values we pass to the constructor functions are of the types we give in the specification—in the sense that they must inherit the class from the specification—and this can be a problem in some cases where R would otherwise normally just convert values. In the specification for the `L` constructor, for example, we require that the argument is `numeric`. We will get an error if we give it an `inter`:
+The type checking is rather strict, however. We demand that the values we pass to the constructor functions are of the types we give in the specification—in the sense that they must inherit the class from the specification—and this can be a problem in some cases where R would otherwise normally just convert values. In the specification for the `L` constructor, for example, we require that the argument is `numeric`. We will get an error if we give it an `integer`:
 
 ```{r}
 L(1L)
@@ -277,24 +277,106 @@ An alternative solution could be to specify more than one type in the specificat
 
 ## Pattern matching
 
-```{r}
+We want to implement pattern matching such that an expression like this
 
-test_pattern_rec <- function(escape, expr, test_expr, eval_env, match_env) {
+```r
+match(L(1),
+      L(v) -> v,
+      T(L(v), L(w)) -> v + w,
+      otherwise -> 5)
+```
+
+should return 1, since the pattern `L(v)` matches the value `L(1)` and we return `v`, which we expect to be bound to 1. Likewise, we want this expression to return nine since `v` should be bound to 4 and `w` to 5 and we return the result of evaluating `v + w`.
+
+```{r}
+match(T(L(4), L(5)),
+      L(v) -> v,
+      T(L(v), L(w)) -> v + w,
+      otherwise -> 5)
+```
+
+We want the `otherwise` keyword to mean anything at all and use it as a default pattern, so in this expression we want to return simply five.
+
+```r
+match(T(L(1), T(L(4), L(5))),
+      L(v) -> v,
+      T(L(v), L(w)) -> v + w,
+      otherwise -> 5)
+```
+
+The syntax for pattern matching uses the right-arrow operator. This is usually an assignment operator—one we cannot specialise, but we can still use it in a meta-programming function. Since assignment operators have the lowest precedence, we don’t have to worry about how tight the operators to the left and right of the operator binds. This is the same reasoning as we had for using the `:=` operator for defining types. We could also have used that operator here, but I like the arrow more for this function. It shows us what different patterns map to. You need to be careful with the `->` operator, though, since it is syntactic sugar for `<-`. This means that once we have an expression that uses `->`, we will actually see a call to `<-` and the left- and right-hand sides will be switched.
+
+The `match` function will take a variable number of arguments. The first is the expression we match against and the rest are captured by the three-dots operator. The expressions there should not be evaluated directly, so we capture them as quosures. We then iterate through them, split them into left-hand and right-hand sides, and test the left-hand side against the expression. The function we use for testing the pattern will return an environment that contains bound variables, if it matches, and `NULL` otherwise. If we have a match, we evaluate the right-hand side in the quosure environment overscoped by the environment we get from matching the pattern.
+
+```{r}
+match <- function(expr, ...) {
+  matchings <- quos(...)
+
+  for (i in seq_along(matchings)) {
+    eval_env <- get_env(matchings[[i]])
+    match_expr <- quo_expr(matchings[[i]])
+    stopifnot(match_expr[[1]] == "<-")
+
+    test_expr <- match_expr[[3]]
+    result_expr <- match_expr[[2]]
+
+    match <- test_pattern(expr, test_expr, eval_env)
+    if (!is_null(match))
+      return(eval_tidy(result_expr, data = match, env = eval_env))
+  }
+
+  stop("No matching pattern!")
+}
+```
+
+In the `test_pattern` function we create the environment where we will bind matched variables. If the pattern is `otherwise`, we return the empty environment—no variables are bound there. Otherwise, we need to recursively explore both pattern and expression.
+
+We use the function `test_pattern_rec` to do this, but we do not call it directly. Instead we use a function called `callCC`. The name stands for *call with current continuation*, and it is a function that sometimes causes some confusion for people not intimately familiar with functional programming. There is no need for this confusions, however, because all the functions does is provide us with a way to return to the point where we called `callCC`.
+
+We wrap the `test_pattern_rec` function in a closure, `tester` that is called with a function that we call `escape`. This is the function that `callCC` will provide. If, at any point, we call the function `escape`, it will terminate whatever we are doing and return to the point where we called `callCC`. This means that we can use `escape` to get out of deep recursions if we find out at some point that the pattern doesn’t match the expression. We do not need to propagate a failed match up the call stack through the recursive function calls. As soon as we call `escape` we are taken back to the end of `test_pattern`. Whatever we called `escape` with—it is a function of a single parameter—will be the return value of the `callCC` call. So, if we find that a pattern doesn’t match, we will call `escape` with `NULL`. This will then be the result of `test_pattern`. If we never call `escape`, but instead return normally from `test_pattern_rec`, then what we return from that function will also be the return value of the `callCC` call. So, if we match the pattern and return an environment from `test_pattern_rec`, this will also be the return value of the `test_pattern` call.
+
+```{r}
+test_pattern <- function(expr, test_expr, eval_env) {
+  # Environment in which to store matched variables
+  match_env <- env()
+
+  if (test_expr == quote(otherwise))
+    return(match_env)
+
+  # Test pattern
+  tester <- function(escape)
+    test_pattern_rec(escape, expr, test_expr, 
+                     eval_env, match_env)
+  callCC(tester)
+}
+```
+
+It is in `test_pattern_rec` the real work is done. It analyses the pattern expression, stored in the `test_expr` variable, and matches it against the value stored in the `expr` variable. It also takes two environments as parameters, one is the environment where the expression and pattern are defined—it needs this environment to look up variables to check what they are—and the other is the environment in which it should bind variables from the pattern. It, of course, also knows the `escape` function that it can use if it finds out that the pattern isn’t matching.
+
+```{r}
+test_pattern_rec <- function(escape, expr, test_expr,
+                             eval_env, match_env) {
 
   # Is this a function-constructor?
   if (is_lang(test_expr)) {
     func <- get(as_string(test_expr[[1]]), eval_env)
-    if ("constructor" %in% class(func)) {
+    
+    if (inherits(func, "constructor")) {
       # This is a constructor.
       # Check if it is the right kind
       constructor <- as_string(test_expr[[1]])
       expr_constructor <- attr(expr, "constructor")
-      if (is_null(expr_constructor) || constructor != expr_constructor)
+      if (is_null(expr_constructor) || 
+          constructor != expr_constructor)
         escape(NULL) # wrong type
 
       # Now check recursively
       for (i in seq_along(expr)) {
-        test_pattern_rec(escape, expr[[i]], test_expr[[i+1]], eval_env, match_env)
+        test_pattern_rec(
+          escape, 
+          expr[[i]], test_expr[[i+1]],
+          eval_env, match_env
+        )
       }
 
       # If we get here, the matching was successfull
@@ -303,7 +385,8 @@ test_pattern_rec <- function(escape, expr, test_expr, eval_env, match_env) {
   }
 
   # Is this a constant-constructor?
-  if (is_symbol(test_expr) && exists(as_string(test_expr), eval_env)) {
+  if (is_symbol(test_expr) && 
+      exists(as_string(test_expr), eval_env)) {
     constructor <- as_string(test_expr)
     val <- get(constructor, eval_env)
     val_constructor <- attr(val, "constructor_constant")
@@ -327,78 +410,55 @@ test_pattern_rec <- function(escape, expr, test_expr, eval_env, match_env) {
 
   match_env
 }
+```
 
-test_pattern <- function(expr, test_expr, eval_env) {
-  # Environment in which to store matched variables
-  match_env <- env()
+There are three cases to consider: The `test_expr` is a constructor function, a constructor constant, or something else.
 
-  if (test_expr == quote(otherwise))
-    return(match_env)
+If `test_expr` is a function call, we test this using `is_lang` from `rlang`, then it might be a function constructor. To figure out if it is, we look the function name up in the evaluation environment, i.e., the environment where the test pattern was written. We then test if the function inherits `"constructor"`. The functions we create in our DSL will also be constructor objects, so if it does, we know we have such one. We then check if `expr` has an attribute `"constructor"`. If it was generated by a call to a constructor, it will. If it doesn’t, then we cannot have a match and we escape with `NULL`. We also escape if the names of the constructors do not match. If they do, we iterate through all the elements in the pattern and expression calls and attempt to match these. If they do not match, we will never return from a recursive call—they will have used the `escape` function to jump directly to the `callCC` point in `test_pattern`. If they return, the pattern did match the expression and we return the `match_env` that now contains any variables that were bound in the matching.
 
-  # Test pattern
-  tester <- function(escape)
-    test_pattern_rec(escape, expr, test_expr, eval_env, match_env)
-  callCC(tester)
-}
+If `test_expr` is not a function call, it might still be a constructor. If it is, then it will be a symbol and the symbol will be a variable in the `eval_env` scope—we test this with the `exists` function. These two tests only tell us that there is a variable with the name from `test_expr` in `eval_env`. Not that it is a constant constructor. To test this, we get the value the variable return to, using the `get` function, and checks if it has an attribute called `"constructor_constant"`. If it does, then that is the name of the constructor and we can test that against the value in `expr` that will either be the object that represents the constant—in which case we have a match—or it will be something else—in which case we escape.
 
-match <- function(expr, ...) {
-  matchings <- quos(...)
-  matchings[[1]]
+If we get past the first two tests, we do not have a constructor. We now either have a value that we must test against `expr` or we have a variable that we should bind to the value of `expr`. Here, I have decided that any symbol will be interpreted as a variable that should be bound and anything else should be a value that we evaluate and compared against `expr`. We could also have checked if the variable was bound and used its value in that case, but that could very easily lead to hard-to-fix bugs. In any case, you can always use quasi-quoting to achieve the same effect.
 
-  for (i in seq_along(matchings)) {
-    eval_env <- get_env(matchings[[i]])
-    match_expr <- quo_expr(matchings[[i]])
-    stopifnot(match_expr[[1]] == "<-")
-
-    test_expr <- match_expr[[3]]
-    result_expr <- match_expr[[2]]
-
-    match <- test_pattern(expr, test_expr, eval_env)
-    if (!is_null(match))
-      return(eval_tidy(result_expr, data = match, env = eval_env))
-  }
-
-  stop("No matching pattern!")
-}
-
-
-tree := T(left : tree, right : tree) | L(value : numeric)
-
+```{r}
+x <- 1
+y <- 2
 match(L(1),
-      L(2) -> 12,
-      L(1) -> 11,
-      otherwise -> 13)
+      L(!!x) -> "x",
+      L(!!y) -> "y")
+```
 
+So, we bind any variable by assigning the value of `expr` to the symbol in the `match_env` environment. Anything that isn’t a symbol should be a value that is the same as `expr`. To get this value, we evaluate the `test_expr` in the `eval_env`.
 
-matching <- function(expr)
-  match(expr,
-        L(v) -> v,
-        T(L(v), L(w)) -> v + w,
-        otherwise -> 5)
+That was the entire implementation of pattern matching. It might not be trivial code, but it is not terribly complex either, and we have created a very powerful language in less than 200 lines of code.
 
-matching(L(1))
-matching(T(L(4), L(5)))
-matching(T(L(1), T(L(4), L(5))))
+We can try it out, now, by implementing a depth first traversal of the binary tree type we defined earlier. The function below is a simple traversal that adds together all the values found in leaves. The `match` call consider the basis case—a leaf—and the recursive case—a tree with a `left` and `right` sub-tree—and doesn’t need an `otherwise` case.
 
-dfs <- function(tree) {
+```{r}
+dft <- function(tree) {
   match(tree,
         L(v) -> v,
-        T(left, right) -> dfs(left) + dfs(right))
+        T(left, right) -> dft(left) + dft(right))
 }
 
-dfs(L(1))
-dfs(T(L(1),L(2)))
-
-x <- T(T(L(1),L(2)),L(3))
-dfs(x)
+dft(L(1))
+dft(T(L(1),L(2)))
+dft(T(T(L(1),L(2)),L(3)))
 ```
 
 ## Lists
 
+We have used linked lists many places in this book, but the functions we have used had to access the list elements in a `list`. We can define linked lists using our new language like this:
+
 ```{r}
-
 linked_list := NIL | CONS(car, cdr : linked_list)
+```
 
+A list is either empty, we use the constant `NIL` to represent that, or it has a head element, `car`, and a tail, `cdr`. Since we implement values we construct from our language as `list` objects, we automatically get the linked-list implementation form this specification.
+
+
+
+```{r}
 reverse_list <- function(lst, acc = NIL) {
   force(acc)
   match(lst,
