@@ -456,7 +456,7 @@ linked_list := NIL | CONS(car, cdr : linked_list)
 
 A list is either empty, we use the constant `NIL` to represent that, or it has a head element, `car`, and a tail, `cdr`. Since we implement values we construct from our language as `list` objects, we automatically get the linked-list implementation form this specification.
 
-With pattern matching, we can write very simple functions for manipulating lists. For example, the following function reverses a list using an accumulator list. In the base case, when the first list is empty, we return the accumulated, otherwise we take the head of the list and prepend it to the accumulated and then recurse. We `force` evaluation of the accumulator to avoid lazy evaluation. With lazy evaluation, we would be building larger and later `CONS` expressions that would not be evaluated until the end of the recursion, at which point we might have built the expression too later for the stack space needed to evaluate the functions (see e.g. [@Mailund:2017ii] and [@Mailund:2017ul] for explanations of how recursion and lazy evaluation can interfere).
+With pattern matching, we can write very simple functions for manipulating lists. For example, the following function reverses a list using an accumulator list. In the base case, when the first list is empty, we return the accumulated, otherwise we take the head of the list and prepend it to the accumulated and then recurse. We `force` evaluation of the accumulator to avoid lazy evaluation. With lazy evaluation, we would be building larger and later `CONS` expressions that would not be evaluated until the end of the recursion, at which point we might have built the expression too later for the stack space needed to evaluate the functions (see e.g. @Mailund:2017ii and @Mailund:2017ul for explanations of how recursion and lazy evaluation can collide to exceed the stack space).
 
 ```{r}
 reverse_list <- function(lst, acc = NIL) {
@@ -524,20 +524,31 @@ Extending the functionality of linked lists with additional function I will leav
 
 ## Search trees
 
-```{r}
-search_tree := E | T(left : search_tree, value, right : search_tree)
+As another example, we can implement search trees. These are trees contains ordered values that satisfy the recursive property that all elements in the left sub-tree of a search tree will have values less than the value stored at the root of the tree, and all elements in the right sub-tree of a search tree will have values larger than the value in the root.
 
+To define search trees, we try a different approach than the binary trees from earlier. We define an empty tree, `E`, and a tree with two sub-trees, `left` and `right`, and a `value`.
+
+```{r}
+search_tree := 
+  E | T(left : search_tree, value, right : search_tree)
+```
+
+We will just implement two functions for the example, insertion and test for membership. For more functions on search tree, I will refer to @Mailund:2017ul [chapter 6].
+
+Both functions search recursively down the tree until they either find the value they want to insert or want to check is in the three, respectively. For insertion, the base case, when it hits a leaf, is to insert the element there. It will create a tree with two empty sub-trees and containing the value. The recursive function builds a tree in the recursion by using the `T` constructor to create new trees in each recursive call. Thus, the tree created at a leaf will be put into the updated tree that the `insert` function creates. For the `member` function, we do not need to update the tree. If we hit a leaf, we know that the element is not in the tree and we can just return `FALSE`. In both functions, the search checks the value in the tree they see in the recursive case. If the value there is greater than `x`, then the only place `x` could be found would be in the left sub-tree, so we continue the search there. If, on the other hand, `x` is greater than the value, then we must search in the right sub-tree. If it is neither smaller than or greater than the value it must be equal to the value. For insertion, this means we do not have to do anything and we can just return the tree that already contains `x`. For the membership test, we can return `TRUE`.
+
+```{r}
 insert <- function(tree, x) {
   match(tree,
         E -> T(E, x, E),
-        T(left, val, right) ->
+        T(left, val, right) -> {
           if (x < val)
             T(insert(left, x), val, right)
           else if (x > val)
             T(left, val, insert(right, x))
           else
             T(left, x, right)
-        )
+        })
 }
 
 member <- function(tree, x) {
@@ -549,19 +560,31 @@ member <- function(tree, x) {
           else TRUE
         })
 }
+```
 
+We can build a tree like this:
+
+```{r}
 tree <- E
 for (i in sample(2:4))
   tree <- insert(tree, i)
+```
 
+Once built, we can test membership like this:
+
+```{r}
 for (i in 1:6) {
   cat(i, " : ", member(tree, i), "\\n")
 }
 ```
 
+
+
 ```{r}
-colour := R | B
-rb_tree := E | T(col : colour, left : rb_tree, value, right : rb_tree)
+colour :=
+  R | B
+rb_tree :=
+  E | T(col : colour, left : rb_tree, value, right : rb_tree)
 
 
 member <- function(tree, x) {
