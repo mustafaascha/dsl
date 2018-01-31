@@ -11,3 +11,5 @@ Designing a language requires some trial and error. With experience, you will re
 Once you are satisfied with how you would ideally want the language to look, you can start to worry about how you would implement it. It might not be possible to implement the language to accept exactly the syntax you came up with in the design phase. Since you are embedding the language in R, expressions in the language must also be valid R code. This put some restrictions on what you can do. But starting from the ideal design you can modify your use-cases until the examples are both valid expressions in your language and in R, and from there on, you can exploit the techniques you have learned in this book to implement your language.
 
 Good luck.
+
+# References

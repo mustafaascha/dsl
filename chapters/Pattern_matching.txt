@@ -2,7 +2,7 @@
 
 In languages such as ML or Haskell, you can define data types by specifying functions you will use to construct values of any given type. In itself, that is not that interesting, but combined with a pattern matching feature of these languages, you can write very succinct functions for transforming data structures.
 
-In my book on *Functional Data Structures in R* **FIXME: REF**, I describe several algorithms that depend on transformation of various trees based on their structure. This involves figuring out the current structure of a tree—does it have a left sub-tree? Is that tree a leaf? If it is a red-black search tree, what is the colour of the tree? And the colour of its right sub-tree? In the algorithms I presented in that book, most of the functions contained tens of lines of code just for matching such tree structure.
+In my book on *Functional Data Structures in R* [@Mailund:2017ul], I describe several algorithms that depend on transformation of various trees based on their structure. This involves figuring out the current structure of a tree—does it have a left sub-tree? Is that tree a leaf? If it is a red-black search tree, what is the colour of the tree? And the colour of its right sub-tree? In the algorithms I presented in that book, most of the functions contained tens of lines of code just for matching such tree structure.
 
 With the language we implement in this chapter, we will make writing such transformation functions vastly more efficient. We will write two main constructions. The first for defining a data structure, which we can use to define red-black search trees like this:
 
@@ -16,10 +16,10 @@ The second constructing is used to match values of such types and then perform a
 ```r
 balance <- function(tree) {
   match(tree,
-        T(B, T(R, a, x, T(R, b, y, c)), z, d) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
-        T(B, T(R, T(R, a, x, b), y, c), z, d) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
-        T(B, a, x, T(R, b, y, T(R, c, z, d))) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
-        T(B, a, x, T(R, T(R, b, y, c), z, d)) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        T(B,T(R,a,x,T(R,b,y,c)),z,d) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
+        T(B,T(R,T(R,a,x,b),y,c),z,d) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
+        T(B,a,x,T(R,b,y,T(R,c,z,d))) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
+        T(B,a,x,T(R,T(R,b,y,c),z,d)) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
         otherwise -> tree)
 }
 ```
@@ -46,7 +46,102 @@ make_args_list <- function(args) {
 
 ## Constructors
 
-The first construction we must implement is for defining data types.
+The first construction we must implement is for defining data types. Here, we will use the `:=` operator. Assignment has the lowest precedence, which means that whatever we write to the left or right of this operator will be arguments to the function. We do not have to worry about an expression in our language being translated into some `call` object of a different type. We cannot override the other assignment operators, `<-`, `->` and `=`, so we have to use `:=`. Since this is also traditionally used to mean “defined to be equal to”, it works quite well.
+
+The approach we take in implementing this part of the pattern matching DSL is different from the examples we have seen earlier. We do not create a data structure that we can analyse nor do we evaluate expressions directly from expressions in our new language. Instead, we combine parsing expressions with code generation—we generate new functions and objects while we parse the specification. The functions and objects are added to the environment in which we call `:=`. This allows us to use the constructors after we have defined them with no further coding, but it does mean that calling `:=` will have side-effects.
+
+The construction function will expect a type name as its left-hand-side parameter and an expression describing the different ways of constructing elements of the type on its right-hand side. We will translate the left-hand side into a quosure, because we want to get its associated environment, and the right-hand side into an expression. For the construction specification, we do not want to evaluate any of the elements (unless the user invokes quasi-quotations). The left-hand side—the type we are defining—is just treated as a string, since that is how the S3 system deals with types, so we will make sure that it is a single symbol and then get the string representation of it. For this, we can use the `quo_name` function from `rlang`. The right-hand side we have to parse, but we delegate this to a separate function that we define below. Finally, we define a function for pretty-printing elements of the new type we define.
+
+```{r}
+`:=` <- function(data_type, constructors) {
+  data_type <- enquo(data_type)
+  constructors <- enexpr(constructors)
+
+  stopifnot(quo_is_symbol(data_type))
+  data_type_name <- quo_name(data_type)
+  process_alternatives(
+    constructors, 
+    data_type_name, 
+    get_env(data_type)
+  )
+
+  assign(paste0("print.", data_type_name),
+         construction_printer, envir = get_env(data_type))
+}
+```
+
+The last statement in this function, the call to `assign`, creates a function for printing elements of the type we are creating. The `construction_printer` function is a function that we define below. It extracts information about values from meta-information we will store in objects of the new type and we can use the same function for all types we define in our language. We use it to specialise the `print` function for this specific type. The `paste0("print.", data_type_name)` call creates the name of the specialisation of the generic `print` and the `assign` function then stores `construction_printer` under that name in the environment we get from `get_env(data_type)`, i.e., the environment where we define the type.
+
+The expression on the right-hand side of `:=` defines how we construct elements of the new type. We allow there to be more than one way to do this, and we separate the various choices using the or-operator `|`. This resembles how we show different alternatives when we specify a grammar, so it is a natural choice. To process the right-hand side, we use the function `process_alternatives`.
+
+```{r}
+process_alternatives <- function(constructors,
+                                 data_type_name,
+                                 env) {
+  if (is_lang(constructors) && constructors[[1]] == "|") {
+    process_alternatives(
+      constructors[[2]],
+      data_type_name,
+      env
+    )
+    process_alternatives(
+      constructors[[3]],
+      data_type_name,
+      env
+    )
+  } else {
+    process_constructor(
+      constructors,
+      data_type_name,
+      env
+    )
+  }
+}
+```
+
+In addition to the constructor expression, we pass the name of the type and the environment we are defining it in as parameters. We do not use these directly in this function but merely pass them along. We will use them later, when we create the actual constructors.
+
+The `process_alternatives` function recursively parse the expression to get all alternatives separated by `|`. The actual constructors will be either a function or a symbol, so the constructor specifications will not have higher precedence than the or-operator. The first time we see something that isn’t a call to `|`, then, we have a constructor. We handle those using the `process_constructor` function.
+
+```{r}
+process_constructor <- function(constructor, 
+                                data_type_name,
+                                env) {
+  if (is_lang(constructor))
+    process_constructor_function(
+      constructor,
+      data_type_name,
+      env
+    )
+  else
+    process_constructor_constant(
+      constructor,
+      data_type_name,
+      env
+    )
+}
+```
+
+This function figures out if what we are looking at is a function constructor or a constant, i.e., a symbol. We use the `is_lang` function to test if we are looking at a function. It does the same as `is.call` from the `base` package; I just prefer the `rlang` functions for this chapter.
+
+Constant constructors are the simplest. They are merely symbols so to make them available for programmers, we need to define a value for each such symbol. We will use `NA` as the value for these variables and store some meta-information with them. A class, so the `construction_printer` function will be called when we try to print the object, and the attribute `constructor_constant` that we will later need for pattern matching.
+
+```{r}
+process_constructor_constant <- function(constructor,
+                                         data_type_name, 
+                                         env) {
+  stopifnot(is_symbol(constructor))
+  constructor_name <- as_string(constructor)
+  constructor_object <- structure(
+    NA,
+    constructor_constant = constructor_name,
+    class = data_type_name
+  )
+  assign(constructor_name, constructor_object, envir = env)
+}
+```
+
+
 
 ```{r}
 process_arguments <- function(constructor_arguments) {
@@ -62,13 +157,6 @@ process_arguments <- function(constructor_arguments) {
     }
   }
   constructor_arguments %>% as.list %>% purrr::map(process_arg) %>% bind_rows
-}
-
-process_constructor <- function(constructor, data_type_name, env) {
-  if (is_lang(constructor))
-    process_constructor_function(constructor, data_type_name, env)
-  else
-    process_constructor_constant(constructor, data_type_name, env)
 }
 
 process_constructor_function <- function(constructor, data_type_name, env) {
@@ -101,26 +189,9 @@ process_constructor_function <- function(constructor, data_type_name, env) {
   # put the constructor in the binding scope
   assign(constructor_name, constructor, envir = env)
 }
+```
 
-process_constructor_constant <- function(constructor, data_type_name, env) {
-  stopifnot(is_symbol(constructor))
-
-  constructor_name <- as_string(constructor)
-  constructor_object <- structure(NA,
-                                  constructor_constant = constructor_name,
-                                  class = data_type_name)
-  assign(constructor_name, constructor_object, envir = env)
-}
-
-process_alternatives <- function(constructors, data_type_name, env) {
-  if (is_lang(constructors) && constructors[[1]] == "|") {
-    process_alternatives(constructors[[2]], data_type_name, env)
-    process_alternatives(constructors[[3]], data_type_name, env)
-  } else {
-    process_constructor(constructors, data_type_name, env)
-  }
-}
-
+```{r}
 deparse_construction <- function(object) {
   constructor_name <- attr(object, "constructor")
   if (is_null(constructor_name)) {
@@ -146,20 +217,9 @@ deparse_construction <- function(object) {
 construction_printer <- function(x, ...) {
   cat(deparse_construction(x), "\\n")
 }
+```
 
-`:=` <- function(data_type, constructors) {
-  data_type <- enquo(data_type)
-  constructors <- enexpr(constructors)
-
-  stopifnot(quo_is_symbol(data_type))
-  data_type_name <- quo_name(data_type)
-
-  c(data_type_name, constructors)
-  process_alternatives(constructors, data_type_name, get_env(data_type))
-  assign(paste0("print.", data_type_name), construction_printer, envir = get_env(data_type))
-}
-
-
+```{r}
 tree := T(left : tree, right : tree) | L(value : numeric)
 
 x <- T(T(L(1),L(2)),L(3))
@@ -425,10 +485,10 @@ insert <- function(tree, x) {
 
 balance <- function(tree) {
   match(tree,
-        T(B, T(R, a, x, T(R, b, y, c)), z, d) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
-        T(B, T(R, T(R, a, x, b), y, c), z, d) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
-        T(B, a, x, T(R, b, y, T(R, c, z, d))) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
-        T(B, a, x, T(R, T(R, b, y, c), z, d)) -> T(R, T(B,a,x,b), y, T(B,c,z,d)),
+        T(B,T(R,a,x,T(R,b,y,c)),z,d) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
+        T(B,T(R,T(R,a,x,b),y,c),z,d) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
+        T(B,a,x,T(R,b,y,T(R,c,z,d))) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
+        T(B,a,x,T(R,T(R,b,y,c),z,d)) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
         otherwise -> tree)
 }
 
