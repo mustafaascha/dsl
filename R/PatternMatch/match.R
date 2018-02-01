@@ -114,6 +114,11 @@ dfs <- function(tree) {
 
 dfs(L(1))
 dfs(T(L(1),L(2)))
+dfs(T(T(L(1),L(2)),L(3)))
 
-x <- T(T(L(1),L(2)),L(3))
-dfs(x)
+x <- 1
+y <- 2
+match(L(1),
+      L(!!x) -> "x",
+      L(!!y) -> "y")
+
