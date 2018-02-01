@@ -2,6 +2,7 @@
 PANDOC := pandoc
 
 PANDOC_OPTS_ALL :=  --standalone --toc \
+					--variable secnumdepth=0 \
 					-f markdown+smart \
 					--top-level-division=chapter \
 					--filter pandoc-crossref \
