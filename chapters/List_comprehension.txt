@@ -57,9 +57,9 @@ in Haskell is what we call list comprehension. List comprehensions consist of th
 
 Using non-standard evaluation, we can write an R function that provides a similar list comprehension syntax. We will write it such that its first argument must be an expression that we evaluate for all elements in the input list(s) and such that its remaining elements either identify lists or predicates. We will use named arguments to identify when an argument defines a list and unnamed arguments for predicates.
 
-The function will work as follows: we take the first argument and make it into a quosure, so we have the expression plus the environment we define it in. We do the same with the rest of the arguments, captured by the three-dots parameter since we want the function to take an arbitrary number of arguments. We create the first quosure with `enquo` and the list of additional arguments with `quos`. These, we then split into list arguments and predicates based on whether they are named arguments or not. While doing this, we evaluate the named arguments to get the data in the input lists and extract the expressions for the predicates using `UQE`.
+The function will work as follows: we take the first argument and make it into a quosure, so we have the expression plus the environment we define it in. We do the same with the rest of the arguments, captured by the three-dots parameter since we want the function to take an arbitrary number of arguments. We create the first quosure with `enquo` and the list of additional arguments with `quos`. These, we then split into list arguments and predicates based on whether they are named arguments or not. While doing this, we evaluate the named arguments to get the data in the input lists and extract the expressions for the predicates using `get_expr`.
 
-With the functions we create, both predicates and the function we use to map over the lists, we have to be a little careful about which context the expression should be evaluated in. We want the expressions to be the body of functions we can map over the lists, so we can’t evaluate them in the quosures’ environments directly, but we do want those environments to be in scope so the expression can see variables that are not part of the list comprehension. We, therefore, get the raw expression from the quosure using the `UQE` function, but functions we create from them will have the quosure environment as their enclosing scope.
+With the functions we create, both predicates and the function we use to map over the lists, we have to be a little careful about which context the expression should be evaluated in. We want the expressions to be the body of functions we can map over the lists, so we can’t evaluate them in the quosures’ environments directly, but we do want those environments to be in scope so the expression can see variables that are not part of the list comprehension. We, therefore, get the raw expression from the quosure using the `get_expr` function, but functions we create from them will have the quosure environment as their enclosing scope.
 
 We create one function per predicate and one for the main expression of the list comprehension. It is not straightforward to combine all the predicates in a filter expression to map over all the lists, but it is straightforward to use them to update a boolean vector where we keep track of which values to include in the final result. We can mask these together while applying the predicates one at a time. We can then map over the input lists and subset each of them—in the code below I use a lambda expression as these are defined in the `purrr` package, as formulas where `.x` refers to the first argument. After filtering the lists, we can apply the main function over them and get the final results.
 
@@ -74,7 +74,7 @@ lc <- function(expr, ...) {
   rest <- quos(...)
   
   lists <- map(rest[names(rest) != ""], eval_tidy)
-  predicates <- map(rest[names(rest) == ""], UQE)
+  predicates <- map(rest[names(rest) == ""], get_expr)
   
   keep_index <- rep(TRUE, length(lists[[1]]))
   for (pred in predicates) {
@@ -83,7 +83,7 @@ lc <- function(expr, ...) {
   }
   filtered_lists <- map(lists, ~.x[keep_index])
   
-  f <- new_function(lists, body = UQE(expr), env = get_env(expr))
+  f <- new_function(lists, body = get_expr(expr), env = get_env(expr))
   pmap(filtered_lists, f)
 }
 ```

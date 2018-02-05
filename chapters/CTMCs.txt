@@ -121,7 +121,7 @@ add_edge <- function(ctmc, from, rate, to) {
 
   r <- enquo(rate)
   ctmc$rate <- cons(r, ctmc$rate)
-  ctmc$params <- cons(collect_symbols_q(UQE(r), get_env(r)), 
+  ctmc$params <- cons(collect_symbols_q(get_expr(r), get_env(r)), 
                        ctmc$params)
 
   ctmc
@@ -145,13 +145,13 @@ print.ctmc <- function(x, ...) {
   cat("transitions:\\n")
   for (i in seq_along(from)) {
     cat(from[[i]], "->", to[[i]], 
-        "\\t[", deparse(UQE(rate[[i]])), "]\\n")
+        "\\t[", deparse(get_expr(rate[[i]])), "]\\n")
   }
   cat("\\n")
 }
 ```
 
-The implementation is straightforward. We translate the linked lists into lists, to make them easier to work with when we loop over the edges, and we reverse them so we will display them in the order in which they were added to the model. With the linked lists we prepend new edges, so they are represented in the opposite order than the one in which they were added. For the parameters, we remove duplications using `unique` as well. After that, we simply print the parameters as a list and print a line for each edge, showing the “from” and “to” state together with the rate expression on the edge. For the latter, we use `UQE` to get the bare expression, rather than the quosure, and we use the function `deparse` to translate the expression into a string that we can print.
+The implementation is straightforward. We translate the linked lists into lists, to make them easier to work with when we loop over the edges, and we reverse them so we will display them in the order in which they were added to the model. With the linked lists we prepend new edges, so they are represented in the opposite order than the one in which they were added. For the parameters, we remove duplications using `unique` as well. After that, we simply print the parameters as a list and print a line for each edge, showing the “from” and “to” state together with the rate expression on the edge. For the latter, we use `get_expr` to get the bare expression, rather than the quosure, and we use the function `deparse` to translate the expression into a string that we can print.
 
 With the three functions we have defined so far, we can now create and print a continuous time Markov chain:
 

@@ -28,10 +28,10 @@ q[[2]]
 environment(q)
 ```
 
-but `rlang` provides functions for working with quosures that make the intent of our code clearer. To get the expression out of a quosure, we use the function `UQE`—unquote expression:
+but `rlang` provides functions for working with quosures that make the intent of our code clearer. To get the expression out of a quosure, we use the function `get_expr`:
 
 ```{r}
-rlang::UQE(q)
+rlang::get_expr(q)
 ```
 
 I honestly think the name is a bit unfortunate since the *un*-quote function returns a quoted expression, but it does strip away the quosure-ness and gives us a raw expression. There is another unquote function, `UQ`, that *does* unquote an expression in the sense of evaluating it, but it has a different purpose that we get to in the next section.
@@ -121,12 +121,12 @@ but not with quosures
 rlang::eval_tidy(quo(xx), env = list2env(list(xx = 5:8)))
 ```
 
-If you want to create a closure with over-scoping, i.e. you want to create a function that evaluates a quosure where it first finds local variables and then look in the quosure’s environment, you cannot directly call `eval_tidy` when creating the function. This would ask R to attempt to evaluate the closure, but you do not yet have the variables you need—those are provided when you call the closure. Instead, you can separate the bare expression and the environment of the quosure using `UQE` and `get_env`, respectively. Consider the function `make_funciton` below:
+If you want to create a closure with over-scoping, i.e. you want to create a function that evaluates a quosure where it first finds local variables and then look in the quosure’s environment, you cannot directly call `eval_tidy` when creating the function. This would ask R to attempt to evaluate the closure, but you do not yet have the variables you need—those are provided when you call the closure. Instead, you can separate the bare expression and the environment of the quosure using `get_expr` and `get_env`, respectively. Consider the function `make_funciton` below:
 
 ```{r}
 make_function <- function(args, body) {
   body <- rlang::enquo(body)
-  rlang::new_function(args, rlang::UQE(body), rlang::get_env(body))
+  rlang::new_function(args, rlang::get_expr(body), rlang::get_env(body))
 }
 f <- function(z) make_function(alist(x=, y=), x + y + z)
 g <- f(z = 1:4)
@@ -143,7 +143,7 @@ Of course, if called directly, there isn’t any difference between using the ca
 ```{r}
 make_function_quo <- function(args, body) {
   body <- rlang::enquo(body)
-  rlang::new_function(args, rlang::UQE(body), rlang::get_env(body))
+  rlang::new_function(args, rlang::get_expr(body), rlang::get_env(body))
 }
 make_function_quote <- function(args, body) {
   body <- substitute(body)
@@ -195,7 +195,7 @@ make_functions <- function(ex, args) {
   i <- 1; lst <- ex$ex
   while (!is.null(lst)) {
     results[[i]] <- 
-      rlang::new_function(args, rlang::UQE(lst$car), 
+      rlang::new_function(args, rlang::get_expr(lst$car), 
                            rlang::get_env(lst$car))
     i <- i + 1
     lst <- lst$cdr
@@ -424,7 +424,10 @@ To see `UQS` in action, we consider another toy example. We write a function for
 mean_expr <- function(ex, ...) {
   ex <- rlang::enquo(ex)
   extra_args <- rlang::dots_list(...)
-  mean_call <- rlang::expr(with(data, mean(UQE(ex), !!!extra_args)))
+  mean_call <- rlang::expr(with(
+      data,
+      mean(!!get_expr(ex), !!!extra_args))
+  )
   rlang::new_function(args = alist(data=), 
                       body = mean_call,
                       env = rlang::get_env(ex))
