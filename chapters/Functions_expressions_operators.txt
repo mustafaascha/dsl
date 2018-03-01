@@ -341,7 +341,7 @@ will be evaluated as
 (x * y) / z
 ```
 
-The operators you can overload are listed, from highest to lowest precedence, below:
+The operators you can use are listed, from highest to lowest precedence, below:
 
 Operator      Usual meaning
 --------      -----------------
@@ -358,6 +358,10 @@ Operator      Usual meaning
 `&` `&&`        And
 `|` `||`        Or
 `:=`          Assignment
+`->` `->>`    Assignment
+`<-` `<<-`    Assignment (right to left)
+
+Of these, you cannot overload the “arrow” assignment operators, only the `:=` operator.
 
 In the graph specifications language from the previous chapter, we could use addition and `%=>%` together because user-defined infix operators—those defined using percentages symbols—have higher precedence than `+`, so we would construct edges before we would add them to a graph. Using `>` and `|` together works for the same reason. Further, because addition (or logical or) is evaluated from left to right, the `dag()` object we created at the beginning of a graph specification would be added to the first edge, which would produce another graph that then would be added to the next edge and so forth. If the evaluation of addition were right-to-left, we would be adding edges to edges, instead of graphs to edges, which would complicate the implementation of the parser.
 
