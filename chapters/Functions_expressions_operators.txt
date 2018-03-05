@@ -360,6 +360,7 @@ Operator      Usual meaning
 `:=`          Assignment
 `->` `->>`    Assignment
 `<-` `<<-`    Assignment (right to left)
+`?`           Help
 
 Of these, you cannot overload the “arrow” assignment operators, only the `:=` operator.
 

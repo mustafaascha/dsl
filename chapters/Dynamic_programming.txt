@@ -1,0 +1,282 @@
+# Dynamic programming
+
+As yet another example, we will create a domain-specific language for specifying dynamic programming algorithms. Dynamic programming is a technique used for speeding up recursive computations. When we need to compute a quantity from a recursion that splits into other recursions, and these recursions overlap—so the computation involves evaluating the same recursive calls multiple times—we can speed up the computation by memorising the results of the recursions. If we *a priori* know the values we will need to compute, we can build up a table of these values from the basis cases and up to the final value instead of from the top-level recursion and down where we need more book-keeping to memorise results.
+
+Take a classical example such as *Fibonacci numbers*. The Fibonacci number $F(n)=1$ if $n$ is 1 or 2; otherwise $F(n)=F(n-1)+F(n-2)$. To compute $F(n)$ we need to recursively compute $F(n-1)$ and $F(n-2)$. To compute $F(n-1)$ we need to compute $F(n-2)$ and $F(n-3)$, which obviously overlap the recursions needed to compute $F(n-2)$, that is computed from $F(n-3)$ and $F(n-4)$.
+
+We could compute the $n$’th Fibonacci number recursively, but we would have to compute an exponential number of recursions. Instead, we could memorise the results of $F(m)$ for each $m$ we use in the recursions to avoid recomputing values. A much simpler approach is to simply compute $F(m)$ for $m=1,\\ldots,n$ in that order, and store the results in a table.
+
+```{r}
+n <- 10
+F <- vector("numeric", length = n)
+F[1] <- F[2] <- 1
+for (m in 3:n) {
+    F[m] <- F[m-1] + F[m-2]
+}
+F[n]
+```
+
+Another, equally classical, example is computing the *edit distance* between two strings, $x$ and $y$, of length $n$ and $m$, respectively. This is the minimum number of transformations—character substitutions, deletions, or insertions—needed to translate $x$ into $y$, and can be defined recursively for $i=1,\\ldots,n+1$ and $j=1,\\ldots,m+1$ as
+
+$$
+E[i,j] = \\left\\{\\begin{array}{lr}
+ i - 1 & j = 1 \\\\
+ j - 1 & i = 1 \\\\
+ \\min\\left\\{
+	 \\begin{array}{lc}
+	 E[i-1,j]+1, & \\mathrm{(Insertion)} \\\\
+	 E[i,j-1]+1, & \\mathrm{(Deletion)} \\\\
+	 E[i-1,j-1]+1_{x[i-1]\\neq y[j-1]} & \\mathrm{(Substitution)}
+	 \\end{array}
+\\right\\}
+\\end{array}\\right.
+$$
+
+There are two base cases, capturing the edit distance of a prefix of $x$ against an empty string or an empty string against a prefix of $y$, and then there are three cases for the recursion, one for insertion, where we move from $x[1,\\ldots,i-2]$ to $x[1,\\ldots,i-1]$ against $y[1,\\ldots,j-1]$, one for deletion, where we move from $y[1,\\ldots,j-2]$ to $y[1,\\ldots,j-1]$ against $x[1,\\ldots,i-1]$, and finally substitution, where we move from $x[1,\\ldots,i-2]$ against $y[1,\\ldots,j-2]$ to $x[1,\\ldots,i-2]$ against $y[1,\\ldots,j-2]$—the cost of this is 0 if $x[i-1]=y[j-1]$ and 1 if $x[i-1]\\neq y[j-1]$, which is captured by the indicator variable $1_{x[i-1]\\neq y[j-1]}$.
+
+This recursion is also readily translated into a dynamic programming algorithm. For test-purposes we can construct these two sequences
+
+```{r}
+x <-c("a", "b", "c")
+y <- c("a", "b", "b", "c")
+```
+
+where, clearly, we can go from $x$ to $y$ by inserting one $b$, so the edit distance is 1.
+
+Computing the recursion, using dynamic programming, could look like this:
+
+```{r}
+n <- length(x)
+m <- length(y)
+E <- vector("numeric", length = (n + 1) * (m + 1))
+dim(E) <- c(n + 1, m + 1)
+for (i in 1:(n + 1))
+    E[i, 1] <- i - 1
+for (j in 1:(m + 1))
+    E[1, j] <- j - 1
+for (i in 2:(n + 1)) {
+    for (j in 2:(m + 1)) {
+        E[i, j] <- min(
+            E[i - 1, j] + 1,
+            E[i, j - 1] + 1,
+            E[i - 1, j - 1] + (x[i - 1] != y[j - 1])
+        )
+    }
+}
+E
+```
+
+The edit distance can be obtained by the bottom-right cell in this table
+
+```{r}
+E[n + 1, m + 1]
+```
+
+For both of these examples, it is straightforward to translate the recursions into dynamic programming algorithms, but the declarations of the problems—expressed in the recursions—are lost in the implementations—the loops where we fill out the tables.
+
+We want to construct a domain-specific language that lets us specify a dynamic programming algorithm from a recursion and let the language build the loops and computations for us. For example, we should be able to specify a recursion like this:
+
+```{r, echo=FALSE}
+library(dynprog)
+```
+```{r}
+fib <- {
+    F[n] <- 1 ? n <= 2
+    F[n] <- F[n - 1] + F[n - 2]
+} %where% {
+    n <- 1:10
+}
+```
+
+and have this expression build the Fibonacci table:
+
+```{r}
+fib
+```
+
+In the recursion, we use the `?` operator to specify the case at which a given rule should be used. You are probably familiar with `?` used to get documentation for functions, but the R parser also considers it an infix operator, and one with the lowest precedence at all—lower than even `<-` assignment. This, as it turns out, is convenient for this DSL. We specify the recursion cases as assignments, and by having an operator with lower precedence than assignment, we will always have a `?`-call at the top-level of the call expression if the rule has a condition associated with it.
+
+Similarly to the Fibonacci recursion, we should be able to specify the edit-distance computation like this
+
+```{r}
+x <- c("a", "b", "c")
+y <- c("a", "b", "b", "c")
+edit <- {
+  E[1,j] <- j - 1
+  E[i,1] <- i - 1
+  E[i,j] <- min(
+      E[i - 1,j] + 1,
+      E[i,j - 1] + 1,
+      E[i - 1,j - 1] + (x[i - 1] != y[j - 1])
+ ) ? i > 1 && j > 1
+} %where% {
+    i <- 1:(length(x) + 1)
+    j <- 1:(length(y) + 1)
+}
+```
+
+and get the table computed:
+
+```{r}
+edit
+```
+
+Here, the first two cases are only valid when $I$ or $j$ is 1, respectively. We could specify this using `?`, but I’m taking another approach. I use the index-pattern on the left-hand side of the assignments to specify that an index variable should match a constant. This gives us a semantics similar to the pattern matching in the previous chapter.
+
+We could also have used this syntax for the Fibonacci recursion, like this:
+
+```{r}
+{
+    F[1] <- 1
+    F[2] <- 1
+    F[n] <- F[n - 1] + F[n - 2]
+} %where% {
+    n <- 1:10
+}
+```
+
+For the semantics of evaluating the recursion, I will use the first rule where both index-patterns and `?`-conditions are satisfied to compute a value. Since we always pick the first such expression, we don’t need to explicitly specify the conditions for the general case in the edit-distance specification, for example:
+
+```{r}
+{
+  E[1,j] <- j - 1
+  E[i,1] <- i - 1
+  E[i,j] <- min(
+      E[i - 1,j] + 1,
+      E[i,j - 1] + 1,
+      E[i - 1,j - 1] + (x[i - 1] != y[j - 1])
+ )
+} %where% {
+    i <- 1:(length(x) + 1)
+    j <- 1:(length(y) + 1)
+}
+```
+
+
+## Parsing expressions
+
+This language is implemented using the user-defined infix operator `%where%`. On the left-hand side of the operator we want a specification of the recursion and on the right-hand side we want a specification of the ranges the algorithm should loop over. We can implement the operator like this:
+
+```{r}
+`%where%` <- function(recursion, ranges) {
+    parsed <- list(
+        recursions = parse_recursion(rlang::enquo(recursion)),
+        ranges = parse_ranges(rlang::enquo(ranges))
+    )
+    eval_dynprog(parsed)
+}
+```
+
+We simply parse the left-hand and right-hand sides and then call the function `eval_dynprog` to run the dynamic programming algorithm and return the result.
+
+The simplest aspect of the language is the specification of the ranges. Here, we define variables and associate them with sequences they should iterate over. In the `%where%` operator we translate the ranges-specification into a quosure, so we know in which scope to evaluate the values for the ranges, and then we process the result like this:
+
+```{r}
+parse_ranges <- function(ranges) {
+    ranges_expr <- rlang::get_expr(ranges)
+    ranges_env <- rlang::get_env(ranges)
+
+    stopifnot(ranges_expr[[1]] == "{")
+    ranges_definitions <- ranges_expr[-1]
+
+    n <- length(ranges_definitions)
+    result <- vector("list", length = n)
+    indices <- vector("character", length = n)
+
+    for (i in seq_along(ranges_definitions)) {
+        assignment <- ranges_definitions[[i]]
+
+        stopifnot(assignment[[1]] == "<-")
+        range_var <- as.character(assignment[[2]])
+        range_value <- eval(assignment[[3]], ranges_env)
+
+        indices[[i]] <- range_var
+        result[[i]] <- range_value
+    }
+
+    names(result) <- indices
+    result
+}
+```
+
+First, we extract the expression and the environment of the quosure. We will process the former and use the latter to evaluate expressions. We expect the ranges to be inside curly-braces, so we test this, and extract the actual specifications. We iterate over those, expecting each to be an assignment, where we can get the index variable on the left-hand side and the expression for the actual ranges on the right-hand side. We evaluate the expressions, in the quosure scope, and build a list as the parse-result. This list will contain one item per range-expression. The name of the item will be the iterator value, and the value will be the result of evaluating the corresponding expression.
+
+```{r}
+parse_ranges(rlang::quo({
+    n <- 1:10
+}))
+parse_ranges(rlang::quo({
+    i <- 1:(length(x) + 1)
+    j <- 1:(length(y) + 1)
+}))
+```
+
+The recursion-specifications are slightly more complicated. Here, we need to extract three different pieces of information: the index-patterns, so we can match against that, the `?`-conditions, so we can check those, and the actual recursions. The parser doesn’t have to be much more complicated than for the ranges, though, as long as we just collect these three properties of each recursive case and put them in lists:
+
+```{r}
+parse_recursion <- function(recursion) {
+    recursion_expr <- rlang::get_expr(recursion)
+    recursion_env <- rlang::get_env(recursion)
+
+    stopifnot(recursion_expr[[1]] == "{")
+    recursion_cases <- recursion_expr[-1]
+
+    n <- length(recursion_cases)
+    patterns <- vector("list", length = n)
+    conditions <- vector("list", length = n)
+    recursions <- vector("list", length = n)
+
+    for (i in seq_along(recursion_cases)) {
+        case <- recursion_cases[[i]]
+
+        condition <- TRUE
+        stopifnot(rlang::is_call(case))
+        if (case[[1]] == "?") {
+            # NB: The order matters here!
+            condition <- case[[3]]
+            case <- case[[2]]
+        }
+
+        stopifnot(case[[1]] == "<-")
+        pattern <- case[[2]]
+        recursion <- case[[3]]
+
+        patterns[[i]] <- pattern
+        recursions[[i]] <- recursion
+        conditions[[i]] <- condition
+    }
+
+    list(
+        recursion_env = recursion_env,
+        patterns = patterns,
+        conditions = conditions,
+        recursions = recursions
+    )
+}
+```
+
+The function is not substantially different from the parser for the ranges. We extract the quosure environment and the expression, check that it is a call to curly braces and then loop through the cases.
+
+If a case is a call to `?`, we know it has a condition. Since `?` has the lowest precedence of all operators, it *will* be the top-level call if a condition exists—unless, at least, users gets cute with parenthesis, but then they get what they deserve. As a default condition, we use `TRUE`. This way, we don’t have to deal with special cases when there is no `?`-condition specified; but if there is, we replace `TRUE` with the expression. Otherwise, we just collect all the information for each recursive case.
+
+We do not evaluate the recursions in the parser, so we do not use the quosure environment in the parser. Instead, we return it together with the parsed information. We will need it later, when we evaluate the recursion-expressions.
+
+```{r}
+parse_recursion(rlang::quo({
+  F[n] <- n * F[n - 1] ? n > 1
+  F[n] <- 1            ? n <= 1
+}))
+```
+
+```{r}
+parse_recursion(rlang::quo({
+  E[1,j] <- j - 1
+  E[i,1] <- i - 1
+  E[i,j] <- min(
+      E[I - 1,j] + 1,
+      E[i,j - 1] + 1,
+      E[I - 1,j - 1] + (x[i - 1] != y[j - 1])
+  ) ? i > 1 && j > 1
+}))
+```
+

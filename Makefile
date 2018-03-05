@@ -14,6 +14,7 @@ CHAPTERS := 000_header.txt \
 			List_comprehension.txt \
 			CTMCs.txt \
 			Pattern_matching.txt \
+			Dynamic_programming.txt \
 			\
 			xx_conclusions.txt
 
@@ -22,7 +23,7 @@ CHAPTERS := 000_header.txt \
 
 SOURCE_CHAPTERS := $(foreach chapter,$(CHAPTERS),chapters/$(chapter))
 
-all: book.pdf book.epub
+all: book.pdf
 
 book.pdf: $(SOURCE_CHAPTERS) Makefile pdf_book/Makefile templates/latex-template.tex
 	(cd pdf_book && make CHAPTERS="$(CHAPTERS)")
