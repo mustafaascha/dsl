@@ -261,6 +261,8 @@ If a case is a call to `?`, we know it has a condition. Since `?` has the lowest
 
 We do not evaluate the recursions in the parser, so we do not use the quosure environment in the parser. Instead, we return it together with the parsed information. We will need it later, when we evaluate the recursion-expressions.
 
+We can test the parser on the Fibonacci recursion to see how it behaves:
+
 ```{r}
 parse_recursion(rlang::quo({
   F[n] <- n * F[n - 1] ? n > 1
@@ -268,12 +270,14 @@ parse_recursion(rlang::quo({
 }))
 ```
 
+Similarly, we can use it to parse the edit-distance recursions:
+
 ```{r}
 parse_recursion(rlang::quo({
   E[1,j] <- j - 1
   E[i,1] <- i - 1
   E[i,j] <- min(
-      E[I - 1,j] + 1,
+      E[i - 1,j] + 1,
       E[i,j - 1] + 1,
       E[i - 1,j - 1] + (x[i - 1] != y[j - 1])
   ) ? i > 1 && j > 1
@@ -319,9 +323,7 @@ with(edit_ranges[3,],
 
 Looping over the rows in a table we create this way will the the core of our algorithm. Before we get to implementing this, however, we need to construct the expressions to insert into the body of the loop.
 
-We start with creating code for testing patterns against range-index variables. 
-
-FIXME
+We start with creating code for testing patterns against range-index variables. Here, we will keep the syntax simpler than the pattern matching from the previous chapter. We assume that the indices in the left-hand side of recursions consist of index variables or constants, and we build a test that simple compares the index-variable names, that we get from the ranges parser, against the values in the recursion specification. The function can be constructed as simply as this:
 
 ```{r}
 make_pattern_match <- function(pattern, range_vars) {
@@ -338,6 +340,10 @@ make_pattern_match <- function(pattern, range_vars) {
 }
 ```
 
+We construct a list of `==` comparisons between the index patterns used in the specification and the values the range-indices can iterate over. For the latter, we first need to translate strings into symbols, so we are sure to compare the *values* of pattern variables and not check that constants matches the name of the variables. We do not perform that  conversion inside this function; we will expect that the caller has already done this. The reason that we use index `i + 2` for the patterns is that patterns are in the form of a call to the `[` operator, so index 1 is the `[` symbol and index 2 is the table name. The indices follow after those two argument-elements.
+
+A couple of examples should illustrate how the pattern-matching predicates are constructed:
+
 ```{r}
 make_pattern_match(rlang::expr(F[1]), list(as.symbol("n")))
 make_pattern_match(rlang::expr(F[n]), list(as.symbol("n")))
@@ -345,30 +351,45 @@ make_pattern_match(rlang::expr(E[1,j]),
                     list(as.symbol("i"), as.symbol("j")))
 ```
 
+We test all range variables, even when they are completely free to take any values. When they are, we simply check that they equal themselves, which they will always do unless they are `NA`—and if they are, there isn't anything useful we can do about them anyway. Creating the test this way makes the code for testing patterns simpler, and testing that variables equal themselves does not change the result the conditions end up with.
+
+We map this expression construction over all the patterns to get test-code for all recursive cases.
+
 ```{r}
 make_pattern_tests <- function(patterns, range_vars) {
     tests <- vector("list", length = length(patterns))
     for (i in seq_along(tests)) {
-        tests[[i]] <- make_pattern_match(patterns[[i]], range_vars)
+        tests[[i]] <- make_pattern_match(
+            patterns[[i]],
+            range_vars
+        )
     }
     tests
 }
 ```
+
+Given the Fibonacci parser-results 
 
 ```{r}
 fib_ranges <- parse_ranges(rlang::quo({
     n <- 1:10
 }))
 fib_recursions <- parse_recursion(rlang::quo({
-  F[n] <- n * F[n - 1] ? n > 1
-  F[n] <- 1            ? n <= 1
+  F[n] <- F[n - 1] + F[n - 2] ? n > 2
+  F[n] <- 1                   ? n <= 2
 }))
+```
 
+we can construct the pattern-tests for all cases:
+
+```{r}
 make_pattern_tests(
     fib_recursions$patterns,
     Map(as.symbol, names(fib_ranges))
 )
 ```
+
+We want to know if *both* pattern and `?`-condition match before we evaluate an expression, so we combine the two lists. We simply construct a new list where we combine the pattern-matching with the `?`-conditions using `&&`:
 
 ```{r}
 make_condition_checks <- function(
@@ -390,13 +411,15 @@ make_condition_checks <- function(
 }
 ```
 
+To verify that this works as intended, we can, again, use the Fibonacci recursions:
+
 ```{r}
 fib_ranges <- parse_ranges(rlang::quo({
     n <- 1:10
 }))
 fib_recursions <- parse_recursion(rlang::quo({
-  F[n] <- n * F[n - 1] ? n > 1
-  F[n] <- 1            ? n <= 1
+  F[n] <- F[n - 1] + F[n - 2] ? n > 2
+  F[n] <- 1                   ? n <= 2
 }))
 make_condition_checks(
     fib_ranges,
@@ -406,8 +429,14 @@ make_condition_checks(
 )
 ```
 
+So, status is now that we have all the test-conditions. We can take these and combine them with the expressions for evaluating the recursions and construct a sequence of `if`-`else`-expressions. If we construct an `if`-call with two arguments, this is interpreted as the test condition and the value to compute when the test is true. If we construct a call with three arguments, the third is considered the `else`-part of the statement. The simplest way to construct a sequence of `if`-`else`-statements is therefore to start from the end of the list. We can translate the last case into an `if`-statement without an `else` part—or we can make an `else` part that throws an error if we prefer. We can then iterate through the cases, at each case constructing a new `if`-expression that takes the previous case as the `else` part. This idea can be implemented thusly:
+
 ```{r}
-make_recursion_case <- function(test_expr, value_expr, continue) {
+make_recursion_case <- function(
+    test_expr,
+    value_expr,
+    continue
+) {
     if (rlang::is_null(continue)) {
         rlang::call2("if", test_expr, value_expr)
     } else {
@@ -437,6 +466,8 @@ make_update_expr <- function(
 }
 ```
 
+For the Fibonacci recursion, the result is this expression:
+
 ```{r}
 make_update_expr(
     fib_ranges,
@@ -446,27 +477,43 @@ make_update_expr(
 )
 ```
 
+What remains to be done, is to evaluate this expression for each combination of range-indices. To do this, we create the table using the `do.call` expression we saw earlier, loop over all table rows, and insert the update expression inside the body of the loop. A function for creating the entire loop function looks like this:^[The `drop=FALSE` in the row-subscripting ensures that we get a row with a named variable even when there is only a single one.]
+
 ```{r}
 make_loop_expr <- function(tbl_name, update_expr) {
     rlang::expr({
         combs <- do.call(expand.grid, ranges)
-        rlang::UQ(tbl_name) <- vector("numeric", length = nrow(combs))
+        rlang::UQ(tbl_name) <- vector(
+            "numeric",
+            length = nrow(combs)
+        )
         dim(rlang::UQ(tbl_name)) <- Map(length, ranges)
         for (row in seq_along(rlang::UQ(tbl_name))) {
-            rlang::UQ(tbl_name)[row] <- with(combs[row, , drop = FALSE], {
-                rlang::UQ(update_expr)
-            })
+            rlang::UQ(tbl_name)[row] <- with(
+                combs[row, , drop = FALSE], {
+                    rlang::UQ(update_expr)
+                }
+            )
         }
         rlang::UQ(tbl_name)
     })
 }
+```
 
+In addition to the `update_expr`, the code needs to know the table name. This is because the `update_expr` will be referring to the table in the recursive cases. The table name is easy to get from the patterns, though:
+
+```{r}
 get_table_name <- function(patterns) {
     p <- patterns[[1]]
     stopifnot(p[[1]] == "[")
     p[[2]]
 }
+get_table_name(fib_recursions$patterns)
+```
 
+The loop, expanded with expressions from the Fibonacci recursion, looks like this:
+
+```{r}
 make_loop_expr(get_table_name(fib_recursions$patterns),
                 make_update_expr(
                     fib_ranges,
@@ -476,33 +523,76 @@ make_loop_expr(get_table_name(fib_recursions$patterns),
                 ))
 ```
 
+For the edit-distance recursion, we get
 
-######
 ```{r}
-eval_recursion <- function(tbl_name, update_expr, ranges, eval_env) {
-    loop <- make_loop_expr(tbl_name, update_expr)
-    eval(loop, envir = rlang::env_clone(
-            environment(), eval_env
-    ))
+edit_ranges <- parse_ranges(rlang::quo({
+    i <- 1:(length(x) + 1)
+    j <- 1:(length(y) + 1)
+}))
+edit_recursions <- parse_recursion(rlang::quo({
+  E[1,j] <- j - 1
+  E[i,1] <- i - 1
+  E[i,j] <- min(
+      E[i - 1,j] + 1,
+      E[i,j - 1] + 1,
+      E[i - 1,j - 1] + (x[i - 1] != y[j - 1])
+  )
+}))
+
+make_loop_expr(get_table_name(edit_recursions$patterns),
+                make_update_expr(
+                    edit_ranges,
+                    edit_recursions$patterns,
+                    edit_recursions$conditions,
+                    edit_recursions$recursions
+                ))
+```
+
+All that remains now is to evaluate this loop-expression, and the only trick to it is to make sure we evaluate it in the right environment. The `with`-statement inside the loop ensures that we over-scope the expression with the relevant index variables, so we do not have to worry about the ranges and range-indices. The expressions we evaluate in the update-expression, however, should be evaluated in the scope where we define the expression, which we captured in the quosures when we parsed the expressions. Ideally, we would just evaluate the loop in this quosure environment, but the loop-expression needs to know about the ranges, so we need to put those in the scope as well. One way to do this is to but a local function-call environment in between the quosure scope and the loop and evaluate the expression this way:
+
+```{r}
+eval_recursion <- function(ranges, recursions) {
+    loop <- make_loop_expr(
+                get_table_name(recursions$patterns),
+                make_update_expr(
+                    ranges,
+                    recursions$patterns,
+                    recursions$conditions,
+                    recursions$recursions
+                ))
+    eval_env <- rlang::env_clone(
+        environment(), # this function environment
+        recursions$recursion_env # quosure environment
+    )
+    eval(loop, envir = eval_env)
 }
 ```
+
+For the Fibonacci expressions, we get:
+
+```{r}
+eval_recursion(fib_ranges, fib_recursions)
+```
+
+The `%where%` operator, as we saw early in this chapter, simply parses the ranges and recursions and then evaluate the result in a function called `eval_dynprog`. This function does nothing more than call the `eval_recursion` function we just wrote:
 
 ```{r}
 eval_dynprog <- function(dynprog) {
-    conditions <- make_pattern_tests(
-        dynprog$recursion$patterns,
-        Map(as.symbol, names(dynprog$ranges))
-    )
-    for (i in seq_along(conditions)) {
-        conditions[[i]] <- rlang::call2(
-            "&&", dynprog$recursion$conditions[[i]], conditions[[i]]
-        )
-    }
-    eval_recursion(
-        get_table_name(dynprog$recursions$patterns),
-        update_expr(conditions, dynprog$recursions$recursions),
-        dynprog$ranges,
-        dynprog$recursions$recursion_env
-    )
+    eval_recursion(dynprog$ranges, dynprog$recursions)
 }
 ```
+
+Providing the parsed pieces directly to the `eval_dynprog` function, instead of going through `%where%`, we see that this is indeed what is happening:
+
+```{r}
+eval_dynprog(list(
+    ranges = fib_ranges, 
+    recursions = fib_recursions
+))
+eval_dynprog(list(
+    ranges = edit_ranges, 
+    recursions = edit_recursions
+))
+```
+
