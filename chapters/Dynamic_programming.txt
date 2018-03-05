@@ -275,8 +275,234 @@ parse_recursion(rlang::quo({
   E[i,j] <- min(
       E[I - 1,j] + 1,
       E[i,j - 1] + 1,
-      E[I - 1,j - 1] + (x[i - 1] != y[j - 1])
+      E[i - 1,j - 1] + (x[i - 1] != y[j - 1])
   ) ? i > 1 && j > 1
 }))
 ```
 
+## Evaluating expressions
+
+To evaluate a dynamic programming expression, we need to iterate over all the ranges, compute the first value associated with satisfied conditions and patterns, and put the result in the dynamic programming table. We *could* construct expressions with nested loops for the ranges to do this, but there is a simpler way. We can construct all combinations of ranges using the expression `do.call(expand.grid, ranges)`.  For the Fibonacci example, we get this:
+
+```{r}
+ranges <- parse_ranges(rlang::quo({
+    n <- 1:10
+}))
+head(do.call(expand.grid, ranges))
+```
+
+Except that we have a name associated with the range, this is just the input. For the edit-distance example, we see the full use of this expression:
+
+```{r}
+ranges <- parse_ranges(rlang::quo({
+    i <- 1:(length(x) + 1)
+    j <- 1:(length(y) + 1)
+}))
+head(do.call(expand.grid, ranges))
+```
+
+Here, we get all combinations of $i$ and $j$ from the ranges. Instead of constructing expressions with nested loops, we can iterate through the rows of the table we get from this invocation. If we extract a row, we get a vector with named range-indices
+
+```{r}
+edit_ranges <- do.call(expand.grid, ranges)
+edit_ranges[1,]
+edit_ranges[2,]
+```
+
+Using the `with` function, we can exploit this to create an environment where range-indices are bound to values, and it is in exactly such environments we want to evaluate the recursions.
+
+```{r}
+with(edit_ranges[3,], 
+    cat(i, j, "\\n")
+)
+```
+
+Looping over the rows in a table we create this way will the the core of our algorithm. Before we get to implementing this, however, we need to construct the expressions to insert into the body of the loop.
+
+We start with creating code for testing patterns against range-index variables. 
+
+FIXME
+
+```{r}
+make_pattern_match <- function(pattern, range_vars) {
+    matches <- vector("list", length = length(range_vars))
+    stopifnot(pattern[[1]] == "[")
+    for (i in seq_along(matches)) {
+        matches[[i]] <- rlang::call2(
+            "==",
+            pattern[[i + 2]],
+            range_vars[[i]]
+        )
+    }
+    rlang::expr(all(!!! matches))
+}
+```
+
+```{r}
+make_pattern_match(rlang::expr(F[1]), list(as.symbol("n")))
+make_pattern_match(rlang::expr(F[n]), list(as.symbol("n")))
+make_pattern_match(rlang::expr(E[1,j]), 
+                    list(as.symbol("i"), as.symbol("j")))
+```
+
+```{r}
+make_pattern_tests <- function(patterns, range_vars) {
+    tests <- vector("list", length = length(patterns))
+    for (i in seq_along(tests)) {
+        tests[[i]] <- make_pattern_match(patterns[[i]], range_vars)
+    }
+    tests
+}
+```
+
+```{r}
+fib_ranges <- parse_ranges(rlang::quo({
+    n <- 1:10
+}))
+fib_recursions <- parse_recursion(rlang::quo({
+  F[n] <- n * F[n - 1] ? n > 1
+  F[n] <- 1            ? n <= 1
+}))
+
+make_pattern_tests(
+    fib_recursions$patterns,
+    Map(as.symbol, names(fib_ranges))
+)
+```
+
+```{r}
+make_condition_checks <- function(
+    ranges,
+    patterns,
+    conditions,
+    recursions
+) {
+    test_conditions <- make_pattern_tests(
+        patterns,
+        Map(as.symbol, names(ranges))
+    )
+    for (i in seq_along(conditions)) {
+        test_conditions[[i]] <- rlang::call2(
+            "&&", test_conditions[[i]], conditions[[i]]
+        )
+    }
+    test_conditions
+}
+```
+
+```{r}
+fib_ranges <- parse_ranges(rlang::quo({
+    n <- 1:10
+}))
+fib_recursions <- parse_recursion(rlang::quo({
+  F[n] <- n * F[n - 1] ? n > 1
+  F[n] <- 1            ? n <= 1
+}))
+make_condition_checks(
+    fib_ranges,
+    fib_recursions$patterns,
+    fib_recursions$conditions,
+    fib_recursions$recursions
+)
+```
+
+```{r}
+make_recursion_case <- function(test_expr, value_expr, continue) {
+    if (rlang::is_null(continue)) {
+        rlang::call2("if", test_expr, value_expr)
+    } else {
+        rlang::call2("if", test_expr, value_expr, continue)
+    }
+}
+
+make_update_expr <- function(
+    ranges,
+    patterns,
+    conditions,
+    recursions
+) {
+    conditions <- make_condition_checks(
+        ranges,
+        patterns,
+        conditions,
+        recursions
+    )
+    continue <- NULL
+    for (i in rev(seq_along(conditions))) {
+        continue <- make_recursion_case(
+            conditions[[i]], recursions[[i]], continue
+        )
+    }
+    continue
+}
+```
+
+```{r}
+make_update_expr(
+    fib_ranges,
+    fib_recursions$patterns,
+    fib_recursions$conditions,
+    fib_recursions$recursions
+)
+```
+
+```{r}
+make_loop_expr <- function(tbl_name, update_expr) {
+    rlang::expr({
+        combs <- do.call(expand.grid, ranges)
+        rlang::UQ(tbl_name) <- vector("numeric", length = nrow(combs))
+        dim(rlang::UQ(tbl_name)) <- Map(length, ranges)
+        for (row in seq_along(rlang::UQ(tbl_name))) {
+            rlang::UQ(tbl_name)[row] <- with(combs[row, , drop = FALSE], {
+                rlang::UQ(update_expr)
+            })
+        }
+        rlang::UQ(tbl_name)
+    })
+}
+
+get_table_name <- function(patterns) {
+    p <- patterns[[1]]
+    stopifnot(p[[1]] == "[")
+    p[[2]]
+}
+
+make_loop_expr(get_table_name(fib_recursions$patterns),
+                make_update_expr(
+                    fib_ranges,
+                    fib_recursions$patterns,
+                    fib_recursions$conditions,
+                    fib_recursions$recursions
+                ))
+```
+
+
+######
+```{r}
+eval_recursion <- function(tbl_name, update_expr, ranges, eval_env) {
+    loop <- make_loop_expr(tbl_name, update_expr)
+    eval(loop, envir = rlang::env_clone(
+            environment(), eval_env
+    ))
+}
+```
+
+```{r}
+eval_dynprog <- function(dynprog) {
+    conditions <- make_pattern_tests(
+        dynprog$recursion$patterns,
+        Map(as.symbol, names(dynprog$ranges))
+    )
+    for (i in seq_along(conditions)) {
+        conditions[[i]] <- rlang::call2(
+            "&&", dynprog$recursion$conditions[[i]], conditions[[i]]
+        )
+    }
+    eval_recursion(
+        get_table_name(dynprog$recursions$patterns),
+        update_expr(conditions, dynprog$recursions$recursions),
+        dynprog$ranges,
+        dynprog$recursions$recursion_env
+    )
+}
+```
