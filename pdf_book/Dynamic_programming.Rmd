@@ -1,10 +1,69 @@
+```{r, echo=FALSE, warning=FALSE}
+suppressPackageStartupMessages(library(ggplot2, quietly = TRUE))
+suppressPackageStartupMessages(library(knitr, quietly = TRUE))
+suppressPackageStartupMessages(library(rlang, quietly = TRUE))
+suppressPackageStartupMessages(library(microbenchmark, quietly = TRUE))
+suppressPackageStartupMessages(library(magrittr, quietly = TRUE))
+suppressPackageStartupMessages(library(purrr, quietly = TRUE))
+suppressPackageStartupMessages(library(dplyr, quietly = TRUE))
+
+assert <- function(expr, expected) {
+	if (!expr) stop(paste0("ERROR: ", expr))
+}
+
+knit_hooks$set(plot = function(x, options) {
+	base = sub("s+$", "", hook_plot_md(x, options))
+    paste0(base, "{#fig:", options$label, "}")
+})
+
+
+opts_chunk$set(fig.width=4, fig.height=4,
+               fig.pos="t", dev="pdf")
+theme_set(theme_bw() +
+    theme(axis.text.x = element_text(size = 6),
+          strip.text = element_text(size = 8)))
+
+
+
+options(width = 50,
+        str = strOptions(vec.len = 3,
+                         strict.width = "cut"))
+
+set.seed(5)
+
+Sys.setenv(LANG = "en")
+
+
+
+cons <- function(car, cdr) list(car = car, cdr = cdr)
+lst_length <- function(lst) {
+  len <- 0
+  while (!is.null(lst)) {
+    lst <- lst$cdr
+    len <- len + 1
+  }
+  len
+}
+lst_to_list <- function(lst) {
+  v <- vector(mode = "list", length = lst_length(lst))
+  index <- 1
+  while (!is.null(lst)) {
+    v[[index]] <- lst$car
+    lst <- lst$cdr
+    index <- index + 1
+  }
+  v
+}
+
+
+```
 # Dynamic programming
 
 As yet another example, we will create a domain-specific language for specifying dynamic programming algorithms. Dynamic programming is a technique used for speeding up recursive computations. When we need to compute a quantity from a recursion that splits into other recursions, and these recursions overlap—so the computation involves evaluating the same recursive calls multiple times—we can speed up the computation by memorising the results of the recursions. If we *a priori* know the values we will need to compute, we can build up a table of these values from the basis cases and up to the final value instead of from the top-level recursion and down where we need more book-keeping to memorise results.
 
 Take a classical example such as *Fibonacci numbers*. The Fibonacci number $F(n)=1$ if $n$ is 1 or 2; otherwise $F(n)=F(n-1)+F(n-2)$. To compute $F(n)$ we need to recursively compute $F(n-1)$ and $F(n-2)$. To compute $F(n-1)$ we need to compute $F(n-2)$ and $F(n-3)$, which obviously overlap the recursions needed to compute $F(n-2)$, that is computed from $F(n-3)$ and $F(n-4)$.
 
-We could compute the $n$’th Fibonacci number recursively, but we would have to compute an exponential number of recursions. Instead, we could memorise the results of $F(m)$ for each $m$ we use in the recursions to avoid recomputing values. A much simpler approach is to simply compute $F(m)$ for $m=1,\\ldots,n$ in that order, and store the results in a table.
+We could compute the $n$’th Fibonacci number recursively, but we would have to compute an exponential number of recursions. Instead, we could memorise the results of $F(m)$ for each $m$ we use in the recursions to avoid recomputing values. A much simpler approach is to simply compute $F(m)$ for $m=1,\ldots,n$ in that order, and store the results in a table.
 
 ```{r}
 n <- 10
@@ -16,23 +75,23 @@ for (m in 3:n) {
 F[n]
 ```
 
-Another, equally classical, example is computing the *edit distance* between two strings, $x$ and $y$, of length $n$ and $m$, respectively. This is the minimum number of transformations—character substitutions, deletions, or insertions—needed to translate $x$ into $y$, and can be defined recursively for $i=1,\\ldots,n+1$ and $j=1,\\ldots,m+1$ as
+Another, equally classical, example is computing the *edit distance* between two strings, $x$ and $y$, of length $n$ and $m$, respectively. This is the minimum number of transformations—character substitutions, deletions, or insertions—needed to translate $x$ into $y$, and can be defined recursively for $i=1,\ldots,n+1$ and $j=1,\ldots,m+1$ as
 
 $$
-E[i,j] = \\left\\{\\begin{array}{lr}
- i - 1 & j = 1 \\\\
- j - 1 & i = 1 \\\\
- \\min\\left\\{
-	 \\begin{array}{lc}
-	 E[i-1,j]+1, & \\mathrm{(Insertion)} \\\\
-	 E[i,j-1]+1, & \\mathrm{(Deletion)} \\\\
-	 E[i-1,j-1]+1_{x[i-1]\\neq y[j-1]} & \\mathrm{(Substitution)}
-	 \\end{array}
-\\right.
-\\end{array}\\right.
+E[i,j] = \left\{\begin{array}{lr}
+ i - 1 & j = 1 \\
+ j - 1 & i = 1 \\
+ \min\left\{
+	 \begin{array}{lc}
+	 E[i-1,j]+1, & \mathrm{(Insertion)} \\
+	 E[i,j-1]+1, & \mathrm{(Deletion)} \\
+	 E[i-1,j-1]+1_{x[i-1]\neq y[j-1]} & \mathrm{(Substitution)}
+	 \end{array}
+\right.
+\end{array}\right.
 $$
 
-There are two base cases, capturing the edit distance of a prefix of $x$ against an empty string or an empty string against a prefix of $y$, and then there are three cases for the recursion, one for insertion, where we move from $x[1,\\ldots,i-2]$ to $x[1,\\ldots,i-1]$ against $y[1,\\ldots,j-1]$, one for deletion, where we move from $y[1,\\ldots,j-2]$ to $y[1,\\ldots,j-1]$ against $x[1,\\ldots,i-1]$, and finally substitution, where we move from $x[1,\\ldots,i-2]$ against $y[1,\\ldots,j-2]$ to $x[1,\\ldots,i-2]$ against $y[1,\\ldots,j-2]$—the cost of this is 0 if $x[i-1]=y[j-1]$ and 1 if $x[i-1]\\neq y[j-1]$, which is captured by the indicator variable $1_{x[i-1]\\neq y[j-1]}$.
+There are two base cases, capturing the edit distance of a prefix of $x$ against an empty string or an empty string against a prefix of $y$, and then there are three cases for the recursion, one for insertion, where we move from $x[1,\ldots,i-2]$ to $x[1,\ldots,i-1]$ against $y[1,\ldots,j-1]$, one for deletion, where we move from $y[1,\ldots,j-2]$ to $y[1,\ldots,j-1]$ against $x[1,\ldots,i-1]$, and finally substitution, where we move from $x[1,\ldots,i-2]$ against $y[1,\ldots,j-2]$ to $x[1,\ldots,i-2]$ against $y[1,\ldots,j-2]$—the cost of this is 0 if $x[i-1]=y[j-1]$ and 1 if $x[i-1]\neq y[j-1]$, which is captured by the indicator variable $1_{x[i-1]\neq y[j-1]}$.
 
 This recursion is also readily translated into a dynamic programming algorithm. For test-purposes we can construct these two sequences
 
@@ -317,7 +376,7 @@ Using the `with` function, we can exploit this to create an environment where ra
 
 ```{r}
 with(edit_ranges[3,], 
-    cat(i, j, "\\n")
+    cat(i, j, "\n")
 )
 ```
 
