@@ -1,9 +1,13 @@
 
 # Matrix expressions {#sec:matrix-expressions}
 
-In the next chapter we discuss computer languages and how they are manipulated in a more theoretical way, but first, we will consider a concrete case---the matrix expressions mentioned in the introduction. This example is a relatively simple domain specific language, but parsing matrix expressions, optimising them, and then evaluating them, captures all the phases we usually have to implement in any DSL and the implementation will also have examples of most of the techniques we will cover in more detail later. The example will use some tricks that are not explained until later in the book, so some aspects of the example might not be obvious at this point, but the broader strokes should be, and will hopefully serve as a taste of what follows in future chapters.
+In the next chapter we discuss computer languages in a more theoretical way, but first, we will consider a concrete case---the matrix expressions mentioned in the introduction. This example is a relatively simple domain specific language, but parsing matrix expressions, optimising them, and then evaluating them, captures all the phases we usually have to implement in any DSL and the implementation will also have examples of most of the techniques we will cover in more detail later. The example will use some tricks that I will not explain until later in the book, so some aspects might not be evident at this point, but the broader strokes should be, and will hopefully serve as a sneak peek of what follows in future chapters.
 
-To remind you, our goal for writing a language for matrix expressions is to improve upon the default performance the built-in matrix expressions have. We achieve this by taking a more global view of expressions that R does---R will handle each operator one at a time from left to right, but we will analyse expressions and rearrange them to improve performance. The steps we must take to do this are these: we must parse expressions into data that we can manipulate, then we must rearrange the expressions into more efficient expressions, and finally, we must provide a way to evaluate the expressions.
+Our goal for writing a language for matrix expressions is to improve upon the default performance the built-in matrix expressions have. We achieve this by taking a more global view of expressions that R does---R will handle each operator one at a time from left to right, but we will analyse expressions and rearrange them to improve performance. The steps we must take to do this are these: 
+
+1. parse expressions into data that we can manipulate,
+2. rearrange the expressions into more efficient expressions, and finally, 
+3. provide a way to evaluate the expressions.
 
 ## Parsing expressions
 
