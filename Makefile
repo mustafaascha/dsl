@@ -18,8 +18,6 @@ CHAPTERS := 000_header.txt \
 			\
 			xx_conclusions.txt
 
-#CHAPTERS := 000_header.txt \
-			Pattern_matching.txt \
 
 SOURCE_CHAPTERS := $(foreach chapter,$(CHAPTERS),chapters/$(chapter))
 
