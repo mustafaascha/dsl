@@ -11,9 +11,9 @@ Our goal for writing a language for matrix expressions is to improve upon the de
 
 ## Parsing expressions
 
-To keep things simple, we will only consider matrix multiplication and matrix addition. We do not include scalar multiplication or inverting or transposing matrices or any other functionality. Adding to the example to include more components of the expression language will follow the same ideas as we need for multiplication and addition, and will not teach us anything new regarding embedding DSLs in R. When you understand the example, you will be able to do this yourself easily.
+To keep things simple, we will only consider matrix multiplication and matrix addition. We do not include scalar multiplication or inverting or transposing matrices or any other functionality.  Adding more components of the expression language in the example will follow the same ideas as we need for multiplication and addition. It will not teach us anything new regarding embedding DSLs in R. When you understand the example, you will be able to do this easily yourself.
 
-With these restrictions, we can say that a matrix expression is either just a matrix, the product of two matrix expressions, or the sum of two matrix expressions. We can represent this as a class hierarchy with one (abstract) superclass representing expressions and three (concrete) sub-classes for actual data, products, and sums. If you are not familiar with object-oriented programming in R, we will have a short guide to all you need to know to follow this book in [Chapter @sec:functions-classes-operators]. Constructors for creating objects of the three concrete classes can look like these:
+With these restrictions, we can say that a matrix expression is either just a matrix, the product of two matrix expressions, or the sum of two matrix expressions. We can represent this as a class hierarchy with one (abstract) superclass representing expressions and three (concrete) sub-classes for actual data, products, and sums. If you are not familiar with object-oriented programming in R, we will have a short guide to everything you need to know in [Chapter @sec:functions-classes-operators]. Constructors for creating objects of the three concrete classes can look like these:
 
 ```{r}
 m <- function(data) {
@@ -39,7 +39,7 @@ matrix_sum <- function(A, B) {
 
 We just wrap the parameters of the constructors in a list and set the appropriate class attributes, and we store the number of rows and number of columns because we will need these when optimising matrix multiplication as we saw in the introduction. 
 
-The only purpose of the `def_expr` attribute we set in the `m` function is pretty printing. It makes the output of the expressions we manipulate below easier to follow. Strictly speaking, we do not *need* any pretty printing for manipulating expressions, but it does make debugging easier, so I tend always to write some code for that. For the matrix expressions we can use the following code:
+The only purpose of the `def_expr` attribute we set in the `m` function is pretty-printing. It makes the output of the expressions we manipulate below easier to follow. Strictly speaking, we do not *need* any pretty printing for manipulating expressions, but it does make debugging easier, so I tend always to write some code for that. For the matrix expressions we can use the following code:
 
 ```{r}
 toString.matrix_data <- function(x, ...) {
@@ -85,7 +85,7 @@ With these, we can write the same expression more familiarly:
 m(A) * m(B) + m(C)
 ```
 
-I have put some assertions in the operators to make sure that the dimensions of the matrices involved in operators are valid. We *could* also have placed these in the constructor functions, but later on, we will manipulate expressions where we know that the dimensions are valid, so we don't need to check them there. We don't expect a user to call the constructors directly but use the operators, so this is the natural place to put the checks.
+I have put some assertions in the operators to make sure that the dimensions of the matrices involved in operators are valid. We *could* also have placed these in the constructor functions, but later on, we will manipulate expressions where we know that the dimensions are valid, so we do not need to check them there. We do not expect a user to call the constructors directly but use the operators, so this is the natural place to put the checks.
 
 We use the `dim` function for the sanity check in the addition operator, so we need a version of this that works on matrix expressions. It could look like this:
 
@@ -95,7 +95,7 @@ dim.matrix_expr <- function(x) {
 }
 ```
 
-You might be wondering why we need the `m` function. After all, it doesn't contribute anything to expressions instead of just wrapping matrices. Couldn't we just use the matrices directly? The answer is no, and it has to do with how we use operator overloading. For `*` and `+` to be the matrix expression versions, we need the first arguments given to them to be a matrix expression. If we wrote simply
+You might be wondering why we need the `m` function. After all, it does not contribute anything to expressions instead of just wrapping matrices. Could we just use the matrices directly? The answer is no, and it has to do with how we use operator overloading. For `*` and `+` to be the matrix expression versions, we need the first arguments given to them to be a matrix expression. If we wrote simply
 
 ```{r}
 A * B + C
@@ -107,7 +107,7 @@ We need a way of bootstrapping us from R's matrices to the matrices in our expre
 
 ### Meta-programming parsing
 
-Using an explicit function such as `m` to bootstrap us into the matrix expression language is the simplest way to use R's own parser for our benefits, but it is not the only way. In R, we can manipulate expressions as if they were data, a feature known as *meta-programming*, and something we return to in [Chapter @sec:parsing_and_manipulating_expressions]. For now, it suffices to know that an expression can be recursively explored. We can use the predicate `is.name` to check if the expression refers to a variable, and we can use the predicate `is.call` to check if it is a function call---and all operators are function calls. So, given an expression that doesn't use the `m` function, and thus doesn't enter our DSL, we can transform it into one that goes like this:
+Using an explicit function such as `m` to bootstrap us into the matrix expression language is the simplest way to use R's own parser for our benefits, but it is not the only way. In R, we can manipulate expressions as if they were data, a feature known as *meta-programming*, and something we return to in [Chapter @sec:parsing_and_manipulating_expressions]. For now, it suffices to know that an expression can be recursively explored. We can use the predicate `is.name` to check if the expression refers to a variable, and we can use the predicate `is.call` to check if it is a function call---and all operators are function calls. So, given an expression that does not use the `m` function, and thus does not enter our DSL, we can transform it into one that goes like this:
 
 ```{r}
 build_matrix_expr <- function(expr) {
@@ -131,7 +131,7 @@ build_matrix_expr <- function(expr) {
 }
 ```
 
-In this implementation, we consider both `*` and `%*%` matrix multiplication, so that we would consider an R expression that uses matrix multiplication as such. Notice also that we consider calls that are parentheses. Parentheses are also function calls in R, and if we want to allow our language to use parentheses, we have to deal with them---as here, where we just continue the recursion. We didn't have to worry about that when we explicitly wrote expressions using `m` and operator overloading because there R already took care of giving parentheses the right semantics.
+In this implementation, we consider both `*` and `%*%` matrix multiplication, so that we would consider an R expression that uses matrix multiplication as such. Notice also that we consider calls that are parentheses. Parentheses are also function calls in R, and if we want to allow our language to use parentheses, we have to deal with them---as here, where we just continue the recursion. We did not have to worry about that when we explicitly wrote expressions using `m` and operator overloading because there R already took care of giving parentheses the right semantics.
 
 For this function to work, it needs a so-called "quoted" expression. If we write a raw expression in R, then R will try to evaluate it before we can manipulate it. We will get an error before we even get to rewrite the expression.
 
@@ -160,7 +160,7 @@ Now, we do not need to quote expressions to do the rewriting.
 parse_matrix_expr(A * B)
 ```
 
-This isn't a perfect solution, and there are some pitfalls, among which is that you cannot use this function from other functions directly. The `substitute` function can be difficult to work with. The further problem is that we are creating a new expression, but an R expression and not the data structure we want in our matrix expression language. The R expression, you can think of as a literate piece of code; it is not yet evaluated to become the result we want. For that, we need the `eval` function, and we need to evaluate the expression in the right context. Working with expressions, and especially evaluating expressions in different environments, are among the more advanced aspects of R programming, so if it looks very complicated right now do not despair. We cover it in detail in [Chapter @sec:env_and_expr]. For now, we will just use this function:
+This isn't a perfect solution, and there are some pitfalls, among which is that you cannot use this function from other functions directly. The `substitute` function can be difficult to work with. The further problem is that we are creating a new expression, but an R expression and not the data structure we want in our matrix expression language. You can think of the R expression as a literate piece of code; it is not yet evaluated to become the result we want. For that, we need the `eval` function, and we need to evaluate the expression in the right context. Working with expressions, and especially evaluating expressions in different environments, are among the more advanced aspects of R programming, so if it looks very complicated right now do not despair. We cover it in detail in [Chapter @sec:env_and_expr]. For now, we will just use this function:
 
 ```{r}
 parse_matrix_expr <- function(expr) {
@@ -198,7 +198,7 @@ build_matrix_expr <- function(expr, env) {
 }
 ```
 
-Most of this function should be self-explanatory, except for where we explicitly set the `def_expr` attribute of a data matrix. This is the attribute be used for pretty printing, and when we call the `m` function it is set to the literate expression we called `m` with. This would be `eval(expr, env)` for all matrices we create with this function. To avoid that, we explicitly set it to the expression we use in the evaluation.
+Most of this function should be self-explanatory, except for where we explicitly set the `def_expr` attribute of a data matrix. This is the attribute to be used for pretty printing, and when we call the `m` function, it is set to the literate expression we called `m` with. This would be `eval(expr, env)` for all matrices we create with this function. To avoid that, we explicitly set it to the expression we use in the evaluation.
 
 Once again, we can wrap the function in another that gets us the quoted expression and provide the environment in which we should evaluate expressions.
 
@@ -211,13 +211,13 @@ parse_matrix_expr <- function(expr) {
 parse_matrix_expr(A * B + matrix(1, nrow = 10, ncol = 10))
 ```
 
-There is much more to manipulating expressions, and especially to how they are evaluated, but we return to that in later chapters.
+There is more to know about manipulating expressions, and especially to how they are evaluated, but we return to that in later chapters.
 
 ## Expression manipulation
 
-Our goal for writing this matrix DSL is to optimise evaluation of these matrix expressions. There are several optimisations we can consider, but R's matrix implementation is reasonably efficient already. It is hard to beat if we try to replace any computations by our own implementations---at least as long as we implement our alternatives in R. Therefore, it makes sense to focus just on the arithmetic rewriting of expressions. 
+Our goal for writing this matrix DSL is to optimise evaluation of these matrix expressions. There are several optimisations we can consider, but R's matrix implementation is reasonably efficient already. It is hard to beat if we try to replace any computations by our own implementations---at least as long as we implement our alternatives in R. Therefore, it makes sense to focus on the arithmetic rewriting of expressions. 
 
-We can rewrite expressions recursively, and use a generic function with specialisations for the three concrete classes we have, a template (that doesn't do anything yet) would look like this:
+We can rewrite expressions recursively, and use a generic function with specialisations for the three concrete classes we have, a template (that does not do anything yet) would look like this:
 
 ```{r}
 rearrange_matrix_expr <- function(expr) 
@@ -240,19 +240,19 @@ These functions traverse a matrix expression and return the same expression stru
 
 We can make some reasonable guesses at how many operations are needed to evaluate an expression from these two rules: 1) multiplying an $n\\times k$ matrix to a $k\\times m$ matrix involves $n\\times k \\times m$ operations, and 2) adding two $n\\times m$ matrices together involve $n\\times m$ operations. If we can do any rewriting of an expression that reduces the number of operations we have to do, then we are improving the expression.
 
-There are some obvious patterns we could try to match and rewrite. For instance, we should always prefer $(A+B)C$ over $AC+BC$. However, we can probably expect that the programmer writing an expression already knows this, so there is likely little to gain from such obvious rewrites. Where we might get some performance is when expressions consist of several matrices multiplied together. There, the order of multiplications matter for the number of operations we have to perform, and the optimal order depends on the dimensions of the matrices, so we cannot merely look at the arithmetic expression and see the obvious way of setting parentheses to get the best performance.
+There are some obvious patterns we could try to match and rewrite. For instance, we should always prefer $(A+B)C$ over $AC+BC$. However, we can probably expect that the programmer writing an expression already knows this, so we will likely get little to gains from such obvious rewrites. Where we might get some performance improvements is when expressions consist of several matrices multiplied together. There, the order of multiplications matter for the number of operations we have to perform, and the optimal order depends on the dimensions of the matrices; we cannot merely look at the arithmetic expression and see the obvious way of setting parentheses to get the best performance.
 
 ### Optimising multiplication
 
-Before we start rewriting multiplication expressions, though, we should figure out how to find the optimal order of multiplication. Assume we have matrices $A_1\\times A_2\\times\\ldots\\times A_n$. We need to set parentheses somewhere, say $(A_1\\times A_2\\times\\ldots A_i)\\times(A_{i+1}\\ldots\\times A_n)$ to select the *last* matrix multiplication. If we first multiply together, in some order, the first $i$ and the last $n-i$ matrices, the last multiplication we have to do is the product of those two. If the dimensions of $(A_1\\times\\ldots A_i)$ is $n\\times k$ and the dimensions of $(A_{i+1}\\ldots\\times A_n)$ is $k\\times m$, then this approach will involve $n\\times k \\times m$ operations plus how long it takes to produce the two matrices. Assume the best possible way of multiplying the first $i$ matrices involve $N_{1,i}$ operations, and the best possible way of multiplying the last $n-i$ matrices together involve $N_{i+1,n}$ operations. Then the best possible solution that involves setting the parentheses where we just did involves $N_{1,i}+N_{i+1,n}+n\\times k\\times m$ operations. Obviously, to get the best performance, we must pick the best $i$ for setting the parentheses at the top level, so we must minimise this expression for $i$. Recursively, we can then solve for the sequences 1 to $i$ and $i+1$ to $n$, to get the best performance there.
+Before we start rewriting multiplication expressions, though, we should figure out how to find the optimal order of multiplication. Let us assume that we have this matrix multiplication: $A_1\\times A_2\\times\\ldots\\times A_n$. We need to set parentheses somewhere, say $(A_1\\times A_2\\times\\ldots A_i)\\times(A_{i+1}\\ldots\\times A_n)$ to select the *last* matrix multiplication. If we first multiply together, in some order, the first $i$ and the last $n-i$ matrices, the last multiplication we have to do is the product of those two. If the dimensions of $(A_1\\times\\ldots A_i)$ is $n\\times k$ and the dimensions of $(A_{i+1}\\ldots\\times A_n)$ is $k\\times m$, then this approach will involve $n\\times k \\times m$ operations plus how long it takes to produce the two matrices. Assuming that the best possible way of multiplying the first $i$ matrices involve $N_{1,i}$ operations, and the best possible way of multiplying the last $n-i$ matrices together involve $N_{i+1,n}$ operations. Then the best possible solution that involves setting the parentheses where we just did involves $N_{1,i}+N_{i+1,n}+n\\times k\\times m$ operations. Obviously, to get the best performance, we must pick the best $i$ for setting the parentheses at the top level, so we must minimise this expression for $i$. Recursively, we can then solve for the sequences 1 to $i$ and $i+1$ to $n$, to get the best performance.
 
-Put in another way, the minimum number of operations we need to multiply together matrices $A_i,A_{i+1},\\ldots,A_j$ can be computed recursively as $N_{i,j} = 0$ when $i=j$ and
+Put in another way, the minimum number of operations we need to multiply matrices $A_i,A_{i+1},\\ldots,A_j$ can be computed recursively as $N_{i,j} = 0$ when $i=j$ and
 $$
 N_{i,j} = \\min_k \\left\\{ N_{i,k} + N_{k+1,j} + \\mathrm{nrow}(A_i)\\times\\mathrm{ncol}(A_k)\\times\\mathrm{ncol}(A_j) \\right\\}
 $$
 otherwise. Actually computing this recursively will involve recomputing the same values many times, but using dynamic programming we can compute the $N_{i,j}$ table efficiently, and from that table we can backtrack and find the optimal way of setting parentheses as well.
 
-In the implementation below, we assume that we have such a list of matrices as input. We then collect their dimensions in a table, `dims`, for easy access. Then, we simply create a table, to represent the $N_{i,j}$ values and fill it using the equation above. Once we have filled the table, we call a backtracking function to gives us the optimal way of multiplying together the matrices from 1 to `n`, given the dimensions, table and matrices.
+In the implementation below, we assume that we have such a list of matrices as input. We then collect their dimensions in a table, `dims`, for easy access. Then, we simply create a table, to represent the $N_{i,j}$ values and fill it using the equation above. Once we have filled the table, we call a backtracking function to give us the optimal way of multiplying together the matrices from 1 to `n`, given the dimensions, table and matrices.
 
 ```{r}
 arrange_optimal_matrix_mult <- function(matrices) {
@@ -275,9 +275,9 @@ arrange_optimal_matrix_mult <- function(matrices) {
 }
 ```
 
-We use a table of matrix dimensions because it allows us to compute the minimum of the expression using a vector expression over `k`, something we couldn't do using the `A` list quite as easily. We loop over the length of intervals rather than just `i` and `j` because we need to compute the `N[i,j]` values in order of increasing lengths for the dynamic programming algorithm to work. If we didn't do it in this order, we would not be guaranteed that the `N` values we use in the expression are filled out yet. Otherwise, though, we just implement the computation sketched above.
+We use a table of matrix dimensions because it allows us to compute the minimum of the expression using a vector expression over `k`, something we could not do using the `A` list quite as easily. We loop over the length of intervals rather than just `i` and `j` because we need to compute the `N[i,j]` values in order of increasing lengths for the dynamic programming algorithm to work. If we did not do it in this order, we would not be guaranteed that the `N` values we use in the expression are filled out yet. Otherwise, though, we just implement the computation sketched above.
 
-The backtracking function is equally simple. We want to find the optimal way of multiplying together matrices `i` to `j`, and we have the table that tells us what $N_{i,j}$ is. So we should find a split point where we can get that value from the recursion. That is where we should set the set of parentheses and then solve to the left and right recursively until we get to the base case of a single matrix, which of course is already the result we should return.
+The backtracking function is equally simple. We want to find the optimal way of multiplying matrices `i` to `j`, and we have the table that tells us what $N_{i,j}$ is. So we should find a split point where we can get that value from the recursion. That is where we should set the parentheses and then solve to the left and right, recursively, until we get to the base case of a single matrix, which of course is already the result we should return.
 
 ```{r}
 backtrack_matrix_mult <- function(i, j, dims, N, matrices) {
@@ -298,9 +298,9 @@ At each step in the backtracking function, we construct a multiplication object 
 
 ### Expression rewriting
 
-With the dynamic programming algorithm in place, we know how to arrange multiplications in the optimal order. We need to have them in a list, however, to access them by index in constant time in the backtracking function, but what we have as input is an expression that gives us a tree of mixed multiplications, addition, and data objects. So the first step we must perform in the rearranging is to collect the components of the multiplication in a list.
+With the dynamic programming algorithm in place, we know how to arrange multiplications in the optimal order. We need to have them in a list, however, to access them by index in constant time in the backtracking function, but what we have as input is an expression that gives us a tree of mixed multiplications, addition, and data objects. So the first step we must perform in the rearrangement is to collect the components of the multiplication in a list.
 
-It is simple enough to visit all the relevant values in an expression. We recurse on all `matrix_mult` objects but not data or `matrix_sum` objects, since it is these that we want to collect. It is inefficient to traverse the tree and grow an actual `list` object one element at a time; every time you extend the length of a `list` object by one element, you need to copy all the old elements. Instead, we can implement a linked list---that we can prepend elements to in constant time---and translate that into a `list` object later.
+It is simple enough to visit all the relevant values in an expression. We recurse on all `matrix_mult` objects but not data or `matrix_sum` objects, since it is these that we want to collect. It is inefficient to traverse the tree and grow an actual `list` object one element at a time; whenever you extend the length of a `list` object by one element, you need to copy all the old elements. Instead, we can implement a linked list---that we can prepend elements to in constant time---and translate that into a `list` object later.
 
 To see this in action, we can consider a simpler tree first:
 
@@ -321,13 +321,13 @@ tree <- inner(leaf(1), inner(inner(leaf(2), leaf(3)), leaf(4)))
 
 One way to implement linked lists is as a `list` object containing two values, the head of the list---an actual value---and the tail of the list---another list, or potentially `NULL` representing the empty list.
 
-Since `head` and `tail` are useful builtin functions in R, I will call these two elements `car` and `cdr` instead. These are the names they have in the Lisp programming language and many other functional programming languages. We can construct a list from a `car` and `cdr` element like this:
+Since `head` and `tail` are useful built-in functions in R, I will call these two elements `car` and `cdr` instead. These are the names they have in the Lisp programming language and many other functional programming languages. We can construct a list from a `car` and `cdr` element like this:
 
 ```{r}
 cons <- function(car, cdr) list(car = car, cdr = cdr)
 ```
 
-To traverse a tree, we use recursion, but we don't want to test the class of subtrees explicitly. Here is what we would usually do: have a test for the base case of having a leaf and another case for when we have an inner node, and in this simple tree this would be sensible enough. However, once we start working with expressions where we can have many different node types, and it might not be obvious what should be considered a base case or a recursive case for any particular traversal, it is better to use generic functions.
+To traverse a tree, we use recursion, but we don't want to test the class of subtrees explicitly. Here is what we would usually do: have a test for the base case of having a leaf and another case for when we have an inner node. This approach would be sensible on this simple tree. However, once we start working with expressions where we can have many different node types, it might not be obvious what should be considered a base case or a recursive case for any particular traversal, it is better to use generic functions.
 
 ```{r}
 collect_leaves_rec <- function(tree, lst) 
@@ -343,7 +343,7 @@ collect_leaves_rec.inner <- function(tree, lst) {
 
 Using a generic function like this is certainly overkill for this simple example, but it illustrates the idea that will be useful for more complex trees. Each node type is responsible for handling itself and potentially recurse further if this is needed. Here, the leaf handler prepends the tree to the list that is passed down the recursion. The tree is just the leaf, so this is the value we want to collect. The result is an updated list that we return from the recursion. For inner nodes, we first call recursively towards the right, passing along the `lst` object. This will prepend the elements in the right subtree to create a new list that we then pass along to a recursion on the left subtree.
 
-The result of this traversal is a linked list containing all the leaves. To create a `list` object out of this, we need to run through the list and compute its length, allocated a `list` of that length, and then run through the linked list again to insert the elements in the `list`. This is one of the few tasks in R that is easier done with a loop than a functional solution, so that is what we will use:
+The result of this traversal is a linked list containing all the leaves. To create a `list` object out of this, we need to run through the list and compute its length, allocate a `list` of that length, and then run through the linked list again to insert the elements in the `list`. This is one of the few tasks in R that is easier done with a loop than a functional solution, so that is what we will use:
 
 ```{r}
 lst_length <- function(lst) {
@@ -390,7 +390,7 @@ rearrange_matrix_expr.matrix_mult <- function(expr) {
 }
 ```
 
-The `collect_mult_components` function can be implemented using a traversal using a generic function like this:
+The `collect_mult_components` function can be implemented using a traversal with a generic function like this:
 
 ```{r}
 collect_mult_components_rec <- function(expr, lst)
@@ -406,7 +406,7 @@ collect_mult_components <- function(expr)
     lst_to_list(collect_mult_components_rec(expr, NULL))
 ```
 
-We use the default implementation to prepend expressions that are not multiplications to the list we are building, while for the multiplication objects we call recursively. Once we have collected all the components we need in a linked list we translate it into a `list` object that lets us look up elements by index, as we need in the dynamic programming algorithm.
+We use the default implementation to prepend expressions that are not multiplications to the list we are building, while we call recursively on the multiplication objects. Once we have collected all the components we need in a linked list we translate it into a `list` object that lets us look up elements by index, as we need in the dynamic programming algorithm.
 
 To see the rearranging in action, we can create the expression we used in the previous chapter. We have four matrices that we multiply together without setting any parentheses.
 
@@ -444,7 +444,7 @@ eval_matrix_expr.matrix_sum <- function(expr)
   eval_matrix_expr(expr$left) + eval_matrix_expr(expr$right)
 ```
 
-The basis case, the `matrix_data` case, gives us an R object that should be a matrix. In the recursive calls, we use matrix multiplication `%*%` and addition `+` on the results of recursive calls, so what we apply these operators on are R objects---which means that the `+` operator is *not* the operator we wrote to create `matrix_sum` objects.
+The base case, the `matrix_data` case, gives us an R object that should be a matrix. In the recursive calls, we use matrix multiplication `%*%` and addition `+` on the results of recursive calls, so what we apply to these operators on are R objects---which means that the `+` operator is *not* the operator we wrote to create `matrix_sum` objects.
 
 Since we are explicitly delaying the evaluation of matrix expressions so we can rearrange them for optimal evaluation, we need a way to trigger the actual evaluation, and this would be the natural place to rearrange an expression as well, so we write a function for that:
 
@@ -452,7 +452,7 @@ Since we are explicitly delaying the evaluation of matrix expressions so we can 
 v <- function(expr) eval_matrix_expr(rearrange_matrix_expr(expr))
 ```
 
-Of course, we can also combine the parsing---the meta-programming approach to this we looked at earlier---and an evaluation of the expression to make a function for faster evaluation of an expression:
+Of course, we can also combine the parsing---the meta-programming approach which we looked at earlier---and an evaluation of the expression. We can write a function for doing faster evaluation of an expression like this:
 
 ```{r}
 fast <- function(expr) {
@@ -460,13 +460,13 @@ fast <- function(expr) {
 }
 ```
 
-As long as we stick to `%*%` and `+` operators, this function will evaluate to the same value as a plain matrix expression
+As long as we stick to `%*%` and `+` operators, this function will evaluate to the same value as a plain matrix expression.
 
 ```{r}
 all(A %*% B %*% C %*% D == fast(A %*% B %*% C %*% D))
 ```
 
-but because we have changed the definition of `*` it is not generally useable. You can modify the parser, though, and you have an optimiser for speeding up your matrix multiplications:
+However, it is not generally useable because we have changed the definition of `*`. You can modify the parser, though, and you have an optimiser for speeding up your matrix multiplications:
 
 ```{r, cache=TRUE}
 res <- microbenchmark(A %*% B %*% C %*% D,
@@ -475,7 +475,7 @@ options(microbenchmark.unit="relative")
 print(res, signif = 3, order = "mean")
 ```
 
-The recursion in `build_matrix_expr` stops the first time it doesn't recognise a call object and create a data object. A better implementation would try to go deeper and optimise as much of the expression as it could, but this is more an exercise in meta-programming than in domain-specific languages.
+The recursion in `build_matrix_expr` stops the first time it does not recognise a call object and create a data object. A better implementation would try to go deeper and optimise as much of the expression as it could, but this is more an exercise in meta-programming than in domain-specific languages.
 
-As a DSL, matrix algebra is really simple. So simple that you might not consider it a language at all, perhaps, but it is; algebraic notation is a DSL that is so useful that we get so familiar with it that we forget how amazing it is compared to the alternative---prose. Still, what we have implemented in this chapter *is* very simple, and while we might use the meta-programming techniques for code optimisation, we probably wouldn't write a DSL for something as simple as this. Still, the example illustrates the phases in reading, analysing, and evaluating expressions we see in most DSLs. The three phases can be simpler or more complex in other DSLs---the "analysis" step might be entirely missing---and they might be merged, so parsing and evaluation are done as a single step, but conceptually these are the steps we usually see.
+As a DSL, matrix algebra is really simple. So simple that you might not consider it a language at all, perhaps, but it is; algebraic notation is a DSL that is so useful that we get so familiar with it that we forget how amazing it is compared to the alternative---prose. Still, what we have implemented in this chapter *is* very simple, and while we might use the meta-programming techniques for code optimisation, we probably would not write a DSL for something as simple as this. Nevertheless, the example illustrates the phases in reading, analysing, and evaluating expressions we see in most DSLs. The three phases can be simpler or more complex in other DSLs---the "analysis" step might be entirely missing---and they might be merged, so parsing and evaluation are done as a single step, but conceptually these are the steps we usually see.
 
