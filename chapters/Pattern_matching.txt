@@ -15,7 +15,7 @@ The second constructing is used to match values of such types and then perform a
 
 ```r
 balance <- function(tree) {
-  match(tree,
+  cases(tree,
         T(B,T(R,a,x,T(R,b,y,c)),z,d) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
         T(B,T(R,T(R,a,x,b),y,c),z,d) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
         T(B,a,x,T(R,b,y,T(R,c,z,d))) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
@@ -279,8 +279,8 @@ An alternative solution could be to specify more than one type in the specificat
 
 We want to implement pattern matching such that an expression like this
 
-```r
-match(L(1),
+```{r}
+cases(L(1),
       L(v) -> v,
       T(L(v), L(w)) -> v + w,
       otherwise -> 5)
@@ -289,7 +289,7 @@ match(L(1),
 should return 1, since the pattern `L(v)` matches the value `L(1)` and we return `v`, which we expect to be bound to 1. Likewise, we want this expression to return nine since `v` should be bound to 4 and `w` to 5 and we return the result of evaluating `v + w`.
 
 ```{r}
-match(T(L(4), L(5)),
+cases(T(L(4), L(5)),
       L(v) -> v,
       T(L(v), L(w)) -> v + w,
       otherwise -> 5)
@@ -297,8 +297,8 @@ match(T(L(4), L(5)),
 
 We want the `otherwise` keyword to mean anything at all and use it as a default pattern, so in this expression, we want to return five.
 
-```r
-match(T(L(1), T(L(4), L(5))),
+```{r}
+cases(T(L(1), T(L(4), L(5))),
       L(v) -> v,
       T(L(v), L(w)) -> v + w,
       otherwise -> 5)
@@ -306,10 +306,10 @@ match(T(L(1), T(L(4), L(5))),
 
 The syntax for pattern matching uses the right-arrow operator. This operator is usually an assignment. We cannot specialise arrow assignments, but we can still use them in a meta-programming function. We use an assignment operator for the same reasons as we had for using the `:=` operator for defining types. Since assignment operators have the lowest precedence, we don’t have to worry about how tight the operators to the left and right of the operator binds. We could also have used that operator here, but I like the arrow more for this function. It shows us what different patterns map to. You need to be careful with the `->` operator, though, since it is syntactic sugar for `<-`. This means that once we have an expression that uses `->`, we will actually see a call to `<-` and the left- and right-hand sides will be switched.
 
-The `match` function will take a variable number of arguments. The first is the expression we match against, and the rest are captured by the three-dots operator. The expressions there should not be evaluated directly, so we capture them as quosures. We then iterate through them, split them into left-hand and right-hand sides, and test the left-hand side against the expression. The function we use for testing the pattern will return an environment that contains bound variables if it matches, and `NULL` otherwise. If we have a match, we evaluate the right-hand side in the quosure environment over-scoped by the environment we get from matching the pattern.
+The `cases` function will take a variable number of arguments. The first is the expression we match against, and the rest are captured by the three-dots operator. The expressions there should not be evaluated directly, so we capture them as quosures. We then iterate through them, split them into left-hand and right-hand sides, and test the left-hand side against the expression. The function we use for testing the pattern will return an environment that contains bound variables if it matches, and `NULL` otherwise. If we have a match, we evaluate the right-hand side in the quosure environment over-scoped by the environment we get from matching the pattern.
 
 ```{r}
-match <- function(expr, ...) {
+cases <- function(expr, ...) {
   matchings <- quos(...)
 
   for (i in seq_along(matchings)) {
@@ -423,7 +423,7 @@ If we get past the first two tests, we do not have a constructor. We now either 
 ```{r}
 x <- 1
 y <- 2
-match(L(1),
+cases(L(1),
       L(!!x) -> "x",
       L(!!y) -> "y")
 ```
@@ -436,7 +436,7 @@ We can try it out, now, by implementing a depth-first traversal of the binary tr
 
 ```{r}
 dft <- function(tree) {
-  match(tree,
+  cases(tree,
         L(v) -> v,
         T(left, right) -> dft(left) + dft(right))
 }
@@ -461,7 +461,7 @@ With pattern matching, we can write very simple functions for manipulating lists
 ```{r}
 reverse_list <- function(lst, acc = NIL) {
   force(acc)
-  match(lst,
+  cases(lst,
         NIL -> acc,
         CONS(car, cdr) -> reverse_list(cdr, CONS(car, acc)))
 }
@@ -472,7 +472,7 @@ We can write a very similar function to compute the length of a list. This will 
 ```{r}
 list_length <- function(lst, acc = 0) {
   force(acc)
-  match(lst,
+  cases(lst,
         NIL -> acc,
         CONS(car, cdr) -> list_length(cdr, acc + 1))
 }
@@ -486,7 +486,7 @@ list_to_vector <- function(lst) {
   v <- vector("list", length = n)
   f <- function(lst, i) {
     force(i)
-    match(lst,
+    cases(lst,
           NIL -> NULL,
           CONS(car, cdr) -> {
             v[[i]] <<- car
@@ -539,7 +539,7 @@ Both functions search recursively down the tree until they either find the value
 
 ```{r}
 insert <- function(tree, x) {
-  match(tree,
+  cases(tree,
         E -> T(E, x, E),
         T(left, val, right) -> {
           if (x < val)
@@ -552,7 +552,7 @@ insert <- function(tree, x) {
 }
 
 member <- function(tree, x) {
-  match(tree,
+  cases(tree,
         E -> FALSE,
         T(left, val, right) -> {
           if (x < val) member(left, x)
@@ -598,7 +598,7 @@ Except for including the colour in the pattern matching, the `member` function f
 
 ```{r}
 member <- function(tree, x) {
-  match(tree,
+  cases(tree,
         E -> FALSE,
         T(col, left, val, right) -> {
           if (x < val) member(left, x)
@@ -624,7 +624,7 @@ These invariants can be guaranteed by always inserting new values in red leaves,
 
 ```{r}
 insert_rec <- function(tree, x) {
-  match(tree,
+  cases(tree,
         E -> T(R, E, x, E),
         T(col, left, val, right) -> {
           if (x < val)
@@ -648,7 +648,7 @@ The transformation rules for the `balance` function are shown in [@fig:RBT-trans
 
 ```{r}
 balance <- function(tree) {
-  match(tree,
+  cases(tree,
         T(B,T(R,a,x,T(R,b,y,c)),z,d) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
         T(B,T(R,T(R,a,x,b),y,c),z,d) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
         T(B,a,x,T(R,b,y,T(R,c,z,d))) -> T(R,T(B,a,x,b),y,T(B,c,z,d)),
