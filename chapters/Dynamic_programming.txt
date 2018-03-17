@@ -155,7 +155,15 @@ For the semantics of evaluating the recursion, I will use the first rule where b
 
 ## Parsing expressions
 
-This language is implemented using the user-defined infix operator `%where%`. On the left-hand side of the operator we want a specification of the recursion, and on the right-hand side, we want a specification of the ranges the algorithm should loop over. We can implement the operator like this:
+The examples give us an idea about what grammar we want for the language. We want it to look somewhat like this:
+
+```
+DYNPROG_EXPR ::= RECURSIONS '%where%' RANGES
+RECURSIONS ::= '{' PATTERN_ASSIGNMENTS '}'
+RANGES ::= '{' RANGES_ASSIGNMENTS '}'
+```
+
+At the top-level, the language is implemented using the user-defined infix operator `%where%`. On the left-hand side of the operator we want a specification of the recursion, and on the right-hand side, we want a specification of the ranges the algorithm should loop over. We can implement the operator like this:
 
 ```{r}
 `%where%` <- function(recursion, ranges) {
@@ -169,7 +177,24 @@ This language is implemented using the user-defined infix operator `%where%`. On
 
 We simply parse the left-hand and right-hand sides and then call the function `eval_dynprog` to run the dynamic programming algorithm and return the result.
 
-The simplest aspect of the language is the specification of the ranges. Here, we define variables and associate them with sequences they should iterate over. In the `%where%` operator we translate the ranges-specification into a quosure, so we know in which scope to evaluate the values for the ranges, and then we process the result like this:
+The simplest aspect of the language is the specification of the ranges. Here, we define variables and associate them with sequences they should iterate over.
+
+```
+RANGES_ASSIGNMENTS ::= RANGES_ASSIGNMENT
+                    |  RANGES_ASSIGNMENT ';' RANGES_ASSIGNMENTS
+```
+
+We want one or more assignments. Here, I've specified that we separate them by ';', but we will also accept new-lines; we simply use what R uses to separate statements.
+
+Assignments take the form:
+
+```
+RANGES_ASSIGNMENT ::= RANGE_INDEX '<-' RANGE_EXPRESSION
+```
+
+I won't break this down further, but just specify that `RANGE_INDEX` should be an R variable and `RANGE_EXPRESSION` an R expression that evaluates to a sequence.
+
+In the `%where%` operator we translate the ranges-specification into a quosure, so we know in which scope to evaluate the values for the ranges, and then we process the result like this:
 
 ```{r}
 parse_ranges <- function(ranges) {
@@ -211,7 +236,26 @@ parse_ranges(rlang::quo({
 }))
 ```
 
-The recursion-specifications are slightly more complicated. Here, we need to extract three different pieces of information: the index-patterns, so we can match against that, the `?`-conditions, such that we can check those and finally the actual recursions. The parser doesn’t have to be much more complicated than for the ranges, though, as long as we just collect these three properties of each recursive case and put them in lists:
+The recursion-specifications are slightly more complicated. 
+
+```
+PATTERN_ASSIGNMENTS ::= PATTERN_ASSIGNMENT
+                     |  PATTERN_ASSIGNMENT ';' PATTERN_ASSIGNMENTS
+```
+
+where
+
+```
+PATTERN_ASSIGNMENT ::= PATTERN '<-' RECURSION
+                    |  PATTERN '<-' RECURSION '?' CONDITION
+```
+```
+PATTERN ::= TABLE '[' INDICES ']'
+```
+
+We won't break the grammar down further than this. Here `TABLE` is a variable, `INDICES` a comma-separated sequence of variables or expressions, and both `RECURSION` and `CONDITION` are R expressions.
+
+With this grammar, we need to extract three different pieces of information: the index-patterns, so we can match against that, the `?`-conditions, such that we can check those and finally the actual recursions. The parser doesn’t have to be much more complicated than for the ranges, though, as long as we just collect these three properties of each recursive case and put them in lists:
 
 ```{r}
 parse_recursion <- function(recursion) {
