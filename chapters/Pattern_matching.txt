@@ -46,7 +46,22 @@ make_args_list <- function(args) {
 
 ## Constructors
 
-The first construction we must implement is for defining data types. Here, we will use the `:=` operator. An assignment has the lowest precedence, which means that whatever we write to the left or right of this operator will be arguments to the function. We do not have to worry about an expression in our language being translated into some `call` object of a different type. We cannot override the other assignment operators, `<-`, `->` and `=`, so we have to use `:=`. Since this is also traditionally used to mean “defined to be equal to”, it works quite well.
+The key feature of this domain-specific language is the type constructors—how we define values of a given type. The pattern matching aspect of the DSL will consist of nested constructor calls, so it is how we define the constructors that is the essential aspect of the language.
+
+Here, we are inspired by function calls. We will use a syntax for constructors that matches variables and function calls:
+
+```
+TYPEDEF ::= TYPENAME ':=' CONSTUCTORS
+CONSTUCTORS ::= CONSTUCTOR | CONSTUCTOR '|' CONSTRUCTORS
+CONSTRUCTOR ::= NAME | NAME '(' ARGS ')'
+ARGS ::= ARG | ARG ',' ARGS
+ARG ::= NAME | NAME : TYPE
+TYPE ::= NAME
+```
+
+We define a new type by giving it a name, to the left of a `:=` operator, and by putting a sequence of constructors on the right of the `:=` operator. Constructors, then, are separated by `|` and are either single names or a name followed by arguments in parentheses, where an argument is either a single name or a name followed by ':' and then a type, where we require that a type is a name.
+
+We implement this grammar by implementing the `:=` operator. An assignment has the lowest precedence, which means that whatever we write to the left or right of this operator will be arguments to the function. We do not have to worry about an expression in our language being translated into some `call` object of a different type. We cannot override the other assignment operators, `<-`, `->` and `=`, so we have to use `:=`. Since this is also traditionally used to mean “defined to be equal to”, it works quite well.
 
 The approach we take in implementing this part of the pattern matching DSL is different from the examples we have seen earlier. We do not create a data structure that we can analyse nor do we evaluate expressions directly from expressions in our new language. Instead, we combine parsing expressions with code generation—we generate new functions and objects while we parse the specification. We add these functions, and other objects for constants, to the environment in which we call `:=`. Adding these objects to this environment allows us to use the constructors after we have defined them with no further coding, but it does mean that calling `:=` will have side-effects.
 
