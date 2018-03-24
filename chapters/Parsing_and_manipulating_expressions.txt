@@ -1,6 +1,6 @@
 # Parsing and manipulating expressions {#sec:parsing_and_manipulating_expressions}
 
-A powerful feature of the R programming language is that it readily allows us to treat expressions in the language itself as data that we can examine and modify as part of a program—so-called “meta-programming”. From within a program we can take a piece of R code and computationally manipulate it before we evaluate it. We just need to get hold of the code *before* it is evaluated, but there are several ways to do that. The simplest is to “quote” expressions, which leaves them as unevaluated expressions.
+A powerful feature of the R programming language is that it readily allows us to treat expressions in the language itself as data that we can examine and modify as part of a program—so-called “meta-programming”. From within a program we can take a piece of R code and computationally manipulate it before we evaluate it. We need to get hold of the code *before* it is evaluated and there are several ways to do that. The simplest is to “quote” expressions, which leaves them as unevaluated expressions.
 
 ## Quoting and evaluating
 
@@ -10,7 +10,7 @@ If you write an expression such as
 2 * x + y
 ```
 
-R will immediately try to evaluate it. It will look for the variables `x` and `y` in the current scope, and if it finds them it will evaluate the expression, if it does not, it will report an error. By the time R has evaluated the expression we either have a value or an error and, if the former, the expression is essentially equivalent to the result of evaluating the expression (computation time notwithstanding). A literate expression as this one is not something we can get a hold on in a program—we either get an error or the value it evaluates to. If we want to get hold of the actual expression, we need to “quote” it. If we wrap the expression in a call to the function `quote`, then we prevent the evaluation of the expression and instead get a data structure that represents the un-evaluated expression.
+R will immediately try to evaluate it. It will look for the variables `x` and `y` in the current scope, and if it finds them it will evaluate the expression; if it does not, it will report an error. By the time R has evaluated the expression we either have a value or an error. If it is the former, the expression is essentially equivalent to the result of evaluating the expression (computation time notwithstanding). A literate expression as this one is not something we can get a hold on to in a program—we either get an error or the value the expression evalutes to. If we want to get hold of the actual expression, we need to “quote” it. If we wrap the expression in a call to the function `quote`, then we prevent the evaluation of the expression and instead get a data structure that represents the un-evaluated expression.
 
 ```{r}
 quote(2 * x + y)
@@ -23,7 +23,7 @@ expr <- quote(2 * x + y)
 class(expr)
 ```
 
-It is a call because infix operators are syntactic sugar for function calls and all function call expressions will have this time. For “call” objects we can get their components by indexing as we would a list. The first element will be the function name and the remaining elements the arguments to the function call. For binary operators, there will, of course, be two arguments.
+It is a call because infix operators are syntactic sugar for function calls and all function call expressions will have this type. For “call” objects we can get their components by indexing as we would a list. The first element will be the function name, and the remaining elements will be the arguments to the function call. For binary operators, of course, there will be two arguments.
 
 For this expression, the function call is an addition. 
 
@@ -39,7 +39,7 @@ It is an addition because multiplication has higher precedence than addition, so
 (2 * x) + y
 ```
 
-so the multination is nested deeper in the expression than the addition—the multiplication can be accessed as the first argument to the addition call, so the second element in the object:
+so the multination is nested deeper in the expression than the addition—the multiplication can be accessed as the first argument to the addition call, so the second element in the object is:
 
 ```{r}
 expr[[2]][[1]]
@@ -59,22 +59,22 @@ is equivalent to writing the literate expression
 2 * x + y
 ```
 
-The `eval` function provides more flexibility in how an expression is evaluated since we can modify the scope of the evaluation, something we return to in much more detail in [Chapter @sec:env_and_expr].
+The `eval` function provides more flexibility in how an expression is evaluated since we can modify the scope of the evaluation, something we return to in more detail in [Chapter @sec:env_and_expr].
 
-Combining quoted expressions and functions introduces a few complications, at least if we want to handle the quoting within a function call. We can, of course, always pass quoted expressions as parameters to a function
+Combining quoted expressions and functions introduces additional complications, at least if we want to handle the quoting within a function call. We can, however, pass quoted expressions as parameters to a function
 
 ```{r}
 f <- function(expr) expr[[1]]
 f(quote(2 * x + y))
 ```
 
-but if we want to provide the literate expression to the function it gets more complicated
+but it gets more complicated if we want to provide the literate expression to the function
 
 ```{r}
 f(2 * x + y)
 ```
 
-In the function `f`, when we return `expr[[1]]`, R will first attempt to evaluate the expression, but the expression depends on the variables `x` and `y` that are undefined. Even if we define `x` and `y`, we still do not get a “call” object that we can manipulate. We just get the result of evaluating the expression.
+In the function `f`, when we return `expr[[1]]`, R will first attempt to evaluate the expression, but the expression depends on the variables `x` and `y`, which are undefined. Even if we define `x` and `y`, we still do not get a “call” object that we can manipulate. We get the result of evaluating the expression.
 
 ```{r}
 x <- 2
@@ -102,7 +102,7 @@ f <- function(expr) {
 f(2 * x + y)
 ```
 
-Two things come together to make this work. First, function arguments in R are lazily evaluated, so the `expr` argument is never evaluated if we do not use it in an expression. So, even though `x` and `y` are not defined, we do not get any errors as long as we do not evaluate the argument to `f`. Second, `substitute` does not evaluate its argument but return a quoted object where variables are replaced with the value they have in the current scope.[^substitute-global-scope] The argument to `substitute` does not have to be a single variable name. It can be any expression that will be considered quoted after which variable substitution is done, and the return value will be the modified quoted expression.
+There are two things that come together to make this work. First, function arguments in R are lazily evaluated, so the `expr` argument is never evaluated if we do not use it in an expression. So, even though `x` and `y` are not defined, we do not get any errors as long as we do not evaluate the argument to `f`. Second, `substitute` does not evaluate its argument but it returns a quoted object where variables are replaced with the value they have in the current scope.[^substitute-global-scope] The argument to `substitute` does not have to be a single variable name. It can be any expression that will be considered quoted after which variable substitution is done, and the return value will be the modified quoted expression.
 
 ```{r}
 f <- function(expr) {
@@ -124,7 +124,7 @@ g <- function(expr) {
 }
 ```
 
-If we make sure that both `x` and `y` are defined, then the function `f` returns twin the value of the expression.
+If we make sure that both `x` and `y` are defined, then the function `f` returns twice the value of the expression.
 
 ```{r}
 x <- 2; y <- 3
@@ -137,7 +137,7 @@ Function `g`, on the other hand, raises an error because the type of `x` is inco
 g(2 * x + y)
 ```
 
-The `eval` function will, by default, evaluate an expression in the current scope, which inside a function in that function’s scope. Inside `g`, we have defined `x` to be the expression we get from the call to `substitute`, so it is *this* `x` that is seen by `eval`. If you want `eval` to evaluate an expression in another scope, you need to give it an environment as a second argument. If you want it to evaluate the expression in the scope where the function is *called*, rather than inside the function scope itself, then you can get that using the `parent.frame` function:
+By default, the eval function will evaluate an expression in the current scope, which inside a function will be that function’s evaluation environment. Inside `g`, we have defined `x` to be the expression we get from the call to `substitute`, so it is *this* `x` that is seen by `eval`. If you want `eval` to evaluate an expression in another scope, you need to give it an environment as a second argument. If you want it to evaluate the expression in the scope where the function is *called*, rather than inside the function scope itself, then you can get that using the `parent.frame` function:
 
 ```{r}
 g <- function(expr) {
@@ -147,7 +147,7 @@ g <- function(expr) {
 g(2 * x + y)
 ```
 
-We will discuss environments, scopes, and how expressions are evaluated in much more detail in [Chapter @sec:env_and_expr]. For the remainder of this chapter, we will focus on manipulating expressions and not evaluating them.
+We will discuss environments, scopes, and how expressions are evaluated in more detail in [Chapter @sec:env_and_expr]. For the remainder of this chapter, we will focus on manipulating expressions and not on evaluating them.
 
 
 ## Exploring expressions
@@ -164,11 +164,13 @@ EXPRESSION_LIST
             |  EXPRESSION EXPRESSION_LIST
 ```
 
-Of course, for expressions we do not have a grammar for constructing these as such—we use R code—but this is the type declaration for expressions. All expressions are one of the four, and when it is a call, there will be other expressions involved. We can explore expressions using recursive functions where the first three meta-variables, `CONSTANT`, `NAME`, and `PAIRLIST` are basic cases and the third, `CALL` is the recursive call.
+We will not expend the grammar of expressions further, but just agree that they will be any legal R expressions. All expressions are one of the four.^[If you want to get really technical, then call expressions come in two flavours. Primitive functions, that are written in C, and closures, that are written in R. If you use the `rlang` package, and the tests for expression types, as we will in later chapters, we have to distinguish between primitives and other calls. In plain R, we consider them both "calls".] The first three are terminals in the grammar while `call` expressions are recursive; a call is constructed from a function and its arguments, and all these are other expressions.
 
-Of the meta-variables, `CONSTANT` refers to any literal data such as numbers or strings, `NAME` to any variable name, `PAIRLIST` refers to formal arguments in function definitions—more on this below—and CALL to function calls. Function calls capture everything more complicated than the first three options since everything in R that does anything is considered a function call, including such statements as function definitions and control structures. As we saw above, calls are list-like and always have at least one element. The first element is the function that is being called and the remaining elements the arguments to that function.
+We can explore expressions using recursive functions where the first three meta-variables, `CONSTANT`, `NAME`, and `PAIRLIST` are basic cases and the third, `CALL` is the recursive call.
 
-To recursively explore an expression we can write functions that test the four cases. Constants are recognised by the `is.atomic` function, names by the `is.name` function, pair lists by the `is.pairlist` and calls by the `is.call` function. A function for printing out an expression’s structure can look like this:
+Of the meta-variables, `CONSTANT` refers to any literal data such as numbers or strings, `NAME` to any variable name, `PAIRLIST` refers to formal arguments in function definitions—more on this below—and `CALL` to function calls. Function calls capture everything more complicated than the first three options. Since everything in R that does anything is considered a function call, including such statements as function definitions and control structures, these are captured in the `CALL` case. As we saw above, calls are list-like and always have at least one element. The first element is the function that is called, and the remaining components are the arguments to that function.
+
+To recursively explore an expression we can write functions that test the four cases. Constants are recognised by the `is.atomic` function; names by the `is.name` function; pair lists by the `is.pairlist`; and calls by the `is.call` function. A function for printing out an expression’s structure can look like this:
 
 ```{r}
 print_expression <- function(expr, indent = "") {
@@ -220,16 +222,16 @@ Declaring a function is considered a function call—a call to the function `fun
 print_expression(quote(function(x) x))
 ```
 
-For a function definition, we have a call object where the first argument is `function`, the second argument is the pair list that defines the function parameters, and the third element is the function body—another expression.  There is also a fourth element, however, called “srcdef”. This element is an atomic vector that captures the actual code used to define the function. In the printing function, we just print the text representation of the source definition, which we get by pasting the expression.
+For a function definition, we have a call object where the first argument is `function`, the second argument is the pair list that defines the function parameters, and the third element is the function body—another expression.  There is also a fourth element called “srcdef”, an atomic vector that captures the actual code used to define the function. In the printing function, we just print the text representation of the source definition, which we get by pasting the expression.
 
-The argument list of a function we declare is where the pair list data structure is used—and only here. We can get the names of the formal parameters using the `names` function and the default arguments by indexing into the pair list. Parameters without default arguments are a special case here—the expression they contain is an empty string. In the printing function, we make this explicit by changing the empty string to the string `MISSING`. If we have default arguments, then those are represented as expressions we can explore recursively.
+The argument list of a function we declare is where the pair list data structure is used. We can get the names of the formal parameters using the `names` function and the default arguments by indexing into the pair list. Parameters without default arguments are a special case here, and the expression they contain is an empty string. In the printing function, we make this explicit by changing the empty string to the string `MISSING`. If we have default arguments, then those are represented as expressions we can explore recursively.
 
 ```{r}
 print_expression(quote(function(x = 2 * 2 + 4) x))
 print_expression(quote(function(x, y = 2 * x) x + y))
 ```
 
-The usual case for function calls is that the first element in the “call” list is a symbol that refers to a function, but any expression that returns a function can be used as a function in R, so the first element of calls can be any expression. For example, if we define a function and call it right after, the first element of the call object will be the function definition.
+The usual case for function calls is that the first element in the “call” list is a symbol that refers to a function and any expression that returns a function can be used as a function in R. This means the first element of calls can be any expression.  For example, if we define a function and call it right after, the first element of the call object will be the function definition.
 
 ```{r}
 expr <- quote((function(x) x)(2))
@@ -238,7 +240,7 @@ expr[[1]]
 expr[[2]]
 ```
 
-As an example of doing something non-trivial with expressions, we can write a function that collects all unbound variables in an expression. If we recurse through an expression, we can collect all the symbols—bound or unbound. To only get the unbound variables, we can keep track of those that are bound and not collect those. Ignoring, at first, those variables that might be bound outside of the expression itself—in the scope where we will call the function—the variables that are bound are those that are named in a function definition. Those, we can recognise as part of the pair list that is the second argument to calls to `function`. When recursing over expressions, we capture those and pass them on down the recursion. Otherwise, we simply collect the symbols. In the implementation below I use the linked lists, we have seen earlier to collect the symbols, and I translate the symbols into characters when I collect them. I do this because I can use the character representation of symbols to check if a symbol exists in an environment later on.
+As an example of doing something non-trivial with expressions, we can write a function that collects all unbound variables in an expression.  If we recurse through an expression, we can collect all the bound and unbound symbols. To get the unbound variables, we can keep track of those that are bound and not collect those. Ignoring, at first, those variables that might be bound outside of the expression itself—in the scope where we will call the function—the variables that are bound are those that are named in a function definition. We can identify those from the pair list that is the second argument to calls to `function`. When recursing over expressions, we capture those and pass them on down the recursion. Aside from that, we simply collect the symbols. In the implementation below I use the linked lists, we have seen earlier to collect the symbols, and I translate the symbols into characters as I collect them. I do this because I can use the character representation of symbols to check if a symbol exists in an environment later on.
 
 ```{r}
 collect_symbols_rec <- function(expr, lst, bound) {
@@ -267,7 +269,7 @@ collect_symbols_rec <- function(expr, lst, bound) {
 }
 ```
 
-When we collect symbols, we explicitly avoid the empty symbol. The empty symbol is the symbol we get when we recurse on a pair list for a function parameter without a default value, and we do not consider this a variable, bound or otherwise. Other than that, the way we handle symbols is straightforward. For pair lists, we collect the parameters that will be bound and recurse through the default arguments to collect any unbound variables there, and for calls, we handle the function definitions by extending the list of bound variables and then recursing. For anything else—which in practice mean for any atomic value—we just return the list we called the function with. There are no unbound variables in constant values.
+We explicitly avoid the empty symbol when we collect symbols. The empty symbol is the symbol we get when we recurse on a pair list for a function parameter without a default value. We do not consider this a variable, bound or otherwise. The way we handle symbols is straightforward. For pair lists, we collect the parameters that will be bound and recurse through the default arguments to collect any unbound variables there. As for calls, we handle the function definitions by extending the list of bound variables and then recursing. For anything else—which in practice mean for any atomic value—we just return the list we called the function with. There are no unbound variables in constant values, after all.
 
 The recursive function works on a quoted expression and collects all symbols that are not bound within the expression itself. We wrap it in a function that does the quoting of the expression, call the recursive function, and then remove the symbols that are defined in the calling scope (the `parent.frame`).
 
@@ -282,18 +284,18 @@ collect_symbols <- function(expr) {
 }
 ```
 
-Here, I use the `discard` function from the `purrr` package to remove all elements that satisfy a predicate, and for the predicate, I use the function `exists` with a second argument that is the calling environment, `parent.frame`. This gets rid of symbols that are defined in the scope where we call `collect_symbols`, including globally defined functions such as `*`, `+` and `function`. We *could* collect all defined variables and pass them along in the `bound` variable, but collecting all symbols is more work than removing symbols afterwards with the combination of `discard` and `exists`.
+Here, I use the `discard` function from the `purrr` package to remove all elements that satisfy a predicate. For the predicate, I use the function `exists` with a second argument that is the calling environment, `parent.frame`. This gets rid of symbols that are defined in the scope where we call `collect_symbols`, including globally defined functions such as `*`, `+` and `function`. 
 
-I pipe the final result through `unlist` to translate the `list` into a character vector. This is only for pretty printing reasons. It gives nicer output to show in the book—for programming you can work with `list`s as easily as vectors.
+I pipe the final result through `unlist` to translate the `list` into a character vector. This is only for pretty printing reasons. It gives nicer output when printed in the console. For programming, you can work with `list`s as well as with vectors.
 
-If we get rid of variables `x` and `y` that we have defined above, the expression `2 * x + y + z` should have three unbound variables, `x`, `y`, and `z`, and indeed that is what we find:
+If we get rid of variables `x` and `y` that we have defined above, the expression `2 * x + y + z` should have three unbound variables, `x`, `y`, and `z`. This is indeed what we find:
 
 ```{r}
 rm(x) ; rm(y)
 collect_symbols(2 * x + y + z)
 ```
 
-If we define one of the variables, for example, `z`, then that is no longer unbound.
+If we define one of the variables, for example, `z`, then it is no longer unbound.
 
 ```{r}
 z <- 3
@@ -307,13 +309,13 @@ collect_symbols(function(x) 2 * x + y + z)
 collect_symbols(function(x) function(y) f(2 * x + y))
 ```
 
-Default values can contain unbound variables, and those we collect:
+Default values can contain unbound variables; we collect those:
 
 ```{r}
 collect_symbols(function(x, y = 2 * w) 2 * x + y)
 ```
 
-We are not entirely done learning about how to explore expressions, though. Or rather, we are not done with learning how to use *non-standard evaluation*, which is what we are implementing in `collect_symbols`—the actual recursive exploration of expressions is as simple as what we have just seen. A function such as `collect_symbols` is a function we could imagine using to write more complicated functionality for a domain-specific language, but calling functions that do their own quoting and that evaluate expressions in scopes that depend on the call-stack introduces some complications.
+We are not entirely done learning about how to explore expressions, yet. The actual recursive exploration of expressions is simple, as shown above. But often, it must be combined with evaluation of expressions. And often, this evaluation does not follow the usual rules for how expressions are evaluated because we have to evaluate some expressions while we keep others quoted. When we start manipulating how expressions are evaluated, we call it *non-standard evaluation* and this is the topic of [Chapter #sec:env_and_expr]. Here, however, I want to give you a taste of what it involves.
 
 If we write a simple function such as this:
 
@@ -327,9 +329,9 @@ we might expect it to give us the unbound variables in an expression, but it ret
 f(2 + y * w)
 ```
 
-The reason for this is the combination of the two issues we will have when we try to program with functions that do so-called "non-standard evaluation." First, when we use `substitute` in the `collect_symbols` function, we get the literal expression the function was called with. When we call the function from `f`, this is `expr`. The expression that `f` itself is called with does not get passed along. Second, the environment in which we test for a bound variable inside `collect_symbols` is the calling environment. When we call the function from `f` the calling environment is the body of `f`. In this environment, the variable `expo` is defined—it is the formal argument of the function—so it will be considered bound.
+This is due to the combination of the two issues we will have when we try to program the functions of the so-called “non-standard evaluation.” First, when we use `substitute` in the `collect_symbols` function, we get the literal expression the that `substitute` was called with. The argument we give to `substitute` in `f` is `expr`. The expression that `f` itself is called with does not get passed along. Second, the environment in which we test for a bound variable inside `collect_symbols` is the calling environment. When we call the function from `f` the calling environment is the body of `f`. In this environment, the variable `expr` is defined—it is the formal argument of the function—so it will be considered bound.
 
-We will explore environments and how to program with non-standard evaluation in some detail later, but the general solution to these problems is to avoid using non-standard evaluation in functions you plan to call from other functions. It is a very powerful technique for writing a domain-specific language, but keep it to the interface of the language and not the internal functions you use to implement the language. For `collect_symbols` we can get around the problem by writing another function that takes as arguments an already quoted expression and the environment we should look for variables in. We can then call this function from `collect_symbols` when we want a non-standard evaluation and call the other function directly if we want to use it from other functions.
+We will explore environments and how to program with non-standard evaluation in some detail later, but the general solution to these problems is to avoid using non-standard evaluation in functions you plan to call from other functions. It is a very powerful technique for writing a domain-specific language, but keep it to the interface of the language and not the internal functions For `collect_symbols` we can get around the problem by writing another function that takes as arguments a quoted expression and an environment we should look for variables in. We can then call this function from `collect_symbols` when we want a non-standard evaluation and call the other function directly if we want to use it from other functions.
 
 ```{r}
 collect_symbols_ <- function(expr, env) {
@@ -346,9 +348,9 @@ collect_symbols <- function(expr) {
 
 ## Manipulating expressions
 
-We can do more than simply inspect expressions. We can also modify them or create new ones from within programs. You cannot modify the two primitive expressions, constants and symbols. They are simply data, and there isn’t anything to modify. We can, however, modify calls and pair-lists, although the second is not something we would usually do—we work with pair lists when we create new functions, and it is easier to explicitly create a new function than it is to modify the definition of one. Either way, both pair lists and calls can be assigned to by indexing into their components.
+We can do more than simply inspect expressions. We can also modify them or create new ones from within programs. You cannot modify the two primitive expressions, constants and symbols. They are simply data. We can, however, modify calls and pair-lists, although the second is not something we would usually do. We work with pair lists when we create new functions but usually we either create new pair lists to set the formal arguments of a function, or we take the arguments from another function; we rarely modify existing pair lists. In any case, both pair lists and calls can be assigned to by indexing into their components.
 
-To get it out of the way with, we can see an example where we modify a pair list. We can construct the expression for defining a function like this:
+To get it out of the way with, below is an example where we modify a pair list. We can construct the expression for defining a function like this:
 
 ```{r}
 f <- quote(function(x) 2 * x)
@@ -368,7 +370,7 @@ f[[2]][[1]] <- quote(2 * y)
 f
 ```
 
-To change the names of function arguments we must change the names of the pair list components which we do using the `names<-` function:
+To change the names of function arguments we must change the names of the pair list components. We can do this using the `names<-` function:
 
 ```{r}
 names(f[[2]]) <- c("a")
@@ -378,7 +380,7 @@ f
 
 In this example, we also saw how we could modify the function body through its third component.
 
-Through this example, we have already seen all we need to know about how to modify call expressions. What we were modifying was just a particular case of a call—the call to `function`. Any other call can be changed the same way.
+Through this example, we have already seen all we need to know about how to modify call expressions. What we were modifying was simply a particular case of a call—the call to `function`. Any other call can be changed the same way.
 
 ```{r}
 expr <- quote(2 * x + y)
@@ -389,7 +391,7 @@ expr[[2]][[1]] <- as.symbol("+")
 expr
 ```
 
-We can construct new call objects using the `call` function. As its first argument, this function takes the function to call—this can be a symbol or a string and will automatically be quoted. After that, you can give it a variable number of arguments that will be evaluated before they are put into the constructed expression. 
+We can construct new call objects using the `call` function. As its first argument, this function takes the function to call. This can be a symbol or a string and will automatically be quoted. After that, you can give it a variable number of arguments that will be evaluated before they are put into the constructed expression. 
 
 ```{r}
 call("+", quote(2 * x), quote(y))
@@ -409,7 +411,7 @@ z <- 2
 call("+", 2 * z, quote(y))
 ```
 
-In the `rlang` package you have two additional functions for creating calls. The function `lang` works as the `call` function except that you can specify a namespace in which the called function should be found—not something we will use in this book. The `new_language` function lets you provide the call arguments as an explicit pair list—again something we will not explore further in this book.
+In the `rlang` package you have two additional functions for creating calls. The function `lang` works as the `call` function except that you can specify a namespace in which the called function should be found. The `new_language` function lets you provide the call arguments as an explicit pair list.
 
 ```{r}
 library(rlang)
@@ -417,9 +419,9 @@ lang("+", quote(2 * x), quote(y))
 new_language(as.symbol("+"), pairlist(quote(2 * x), quote(y)))
 ```
 
-The `rlang` package is worth exploring if you plan to do much meta-programming in R. It provides several functions for manipulating and creating expressions and functions, and functions for managing environments. We will explore the package more in [Chapter @sec:tidy-eval].
+The `rlang` package is worth exploring if you plan to do much meta-programming in R. It provides several functions for manipulating and creating expressions and functions, and for managing environments. We will explore the package more in [Chapter @sec:tidy-eval].
 
-If the call you are making is to `function`, there is one extra complication. This function needs a pair list as its second argument, so you will have to make such a list. If you want to create a function without default parameters, you need to make a list with “missing” elements at named positions. The way to make a missing argument is by calling `substitute` without arguments, so a function that creates a list of function parameters without default arguments can look like this:
+There is one extra complication if the call you are making is to `function`. This function needs a pair list as its second argument, so you will have to make such an object. If you want to create a function without default parameters, you need to make a list with “missing” elements at named positions. The way to make a missing argument is by calling `substitute` without arguments, so a function that creates a list of function parameters without default arguments can look like this:
 
 ```{r}
 make_args_list <- function(args) {
@@ -444,7 +446,7 @@ Remember, however, that this is an expression for creating a function, it is not
 f(2, 3)
 ```
 
-The error message here looks a bit odd. R is not complaining that `f` is not a function but that the function `f` cannot be found. This is because R will look for functions when you use a symbol for a function call and will not confuse the value `f` with the function `f`, and here we only have a value. To get the actual function, we need to evaluate the call.
+The error message here looks a bit odd. R is not complaining that `f` is not a function but that the function `f` cannot be found. This is because R will look for functions when you use a symbol for a function call and will not confuse the value `f` with the function `f`. Here, we only have a value-version of `f`. Anyway, to get the actual function, we need to evaluate the call.
 
 ```{r}
 f <- eval(f)
@@ -452,7 +454,7 @@ f
 f(2, 3)
 ```
 
-A more direct way of creating a function is using the `new_function` function from the `rlang` package:
+A more direct way of creating a function is by using the `new_function` function from the `rlang` package:
 
 ```{r}
 f <- new_function(make_args_list(c("x", "y")), 
@@ -461,7 +463,7 @@ f
 f(2, 3)
 ```
 
-As a final example, we can try to combine the expression creating methods we have just seen with the expression exploration functions from the previous section to translate expressions with unbound variables into functions. We can collect all unbound variables in an expression using the `collect_symbols_` function from earlier and then use `new_function` to create the function:
+As a final example, we can combine the expression creating methods we have seen with the expression exploration functions from the previous section to translate expressions with unbound variables into functions. We can collect all unbound variables in an expression using the `collect_symbols_` function from earlier and then use `new_function` to create the function:
 
 ```{r}
 expr_to_function <- function(expr) {
@@ -471,11 +473,11 @@ expr_to_function <- function(expr) {
 }
 ```
 
-Here, I have used another function from `rlang`, `caller_env`. This function does the same as the `parent.frame` function we have used earlier, but has a more informative name, so if we have loaded `rlang` anyway, I prefer to use it over `parent.frame`.
+Here, I have used another function from `rlang`, `caller_env`.  This function does the same as the `parent.frame` we have used earlier but with a more informative name. I recommend to use `caller_env` over `parent.frame` for that reason.
 
-In this call to `new_function`, we provide three arguments; before we only provided two. The arguments we provided earlier were the list of formal arguments and the expression that should be the body of the function—those we provide again here. The third argument is the enclosing environment of the function; where the function will find the value of variables that are not bound within the function itself as parameters or local variables. Since we consider variables found in the caller environment as bound, we have to make sure that the function we create can also find them, so we put the function in the same environment. If this seems mysterious to you, return to this example after you have read [Chapter @sec:env_and_expr] where we go into environments in much more detail.
+We provide more arguments in this call to `new_function` than in the previous example where we used it. There, we only provided two arguments, the parameters of the function and its body. Here, we also provide its environment. This will be the function's enclosing environment. It is here that the function will find the value of variables that are not local to the function itself or parameters to the function. Since we consider variables found in the caller environment as bound, we have to make sure that the function we create can also find them, so we put the function in the same environment. If this explanation is unclear to you, then return to this example after you have read [Chapter @sec:env_and_expr] where we go into environments in much more detail. It should, hopefully, be clearer then.
 
-The `expr_to_function` does exactly what we intended it to; it creates a function from an expression, whose arguments are the unbound variables in the expression.
+The `expr_to_function` does exactly what we intended it to. It creates a function from an expression, whose arguments are the unbound variables.
 
 ```{r}
 f <- expr_to_function(2 * x + y)
@@ -486,7 +488,7 @@ g
 g(y = 3)(x = 2)
 ```
 
-Since the order that the variables in the function will depend on the order in which they appear in the expression, and whatever order the `unique` function will leave them in, calling the resulting function is probably best done with named arguments…
+The order of the variables in the function will depend on the order in which they appear in the expression and in whatever order the unique function will leave them in. Therefore, calling the resulting function is best done with named arguments. 
 
 
 
