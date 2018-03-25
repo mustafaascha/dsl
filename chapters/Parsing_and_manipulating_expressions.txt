@@ -157,6 +157,7 @@ An expression is a recursive data structure, and you can explore it as such. We 
 ```
 EXPRESSION ::= CONSTANT
             |  NAME
+            |  PRIMITIVE
             |  PAIRLIST
             |  CALL EXPRESSION_LIST
 EXPRESSION_LIST 
@@ -164,13 +165,13 @@ EXPRESSION_LIST
             |  EXPRESSION EXPRESSION_LIST
 ```
 
-We will not expend the grammar of expressions further, but just agree that they will be any legal R expressions. All expressions are one of the four.^[If you want to get really technical, then call expressions come in two flavours. Primitive functions, that are written in C, and closures, that are written in R. If you use the `rlang` package, and the tests for expression types, as we will in later chapters, we have to distinguish between primitives and other calls. In plain R, we consider them both "calls".] The first three are terminals in the grammar while `call` expressions are recursive; a call is constructed from a function and its arguments, and all these are other expressions.
+We will not expend the grammar of expressions further, but just agree that they will be any legal R expressions. All expressions are one of the five. The first four are terminals in the grammar while `call` expressions are recursive; a call is constructed from a function and its arguments, and all these are other expressions.
 
-We can explore expressions using recursive functions where the first three meta-variables, `CONSTANT`, `NAME`, and `PAIRLIST` are basic cases and the third, `CALL` is the recursive call.
+We can explore expressions using recursive functions where the first three meta-variables, `CONSTANT`, `NAME`, and `PRIMITIVE`, are basis cases that do not contain other expressions, while `PAIRLIST` might and `CALL` will contain other expressions and must the handled in recursive calls.
 
-Of the meta-variables, `CONSTANT` refers to any literal data such as numbers or strings, `NAME` to any variable name, `PAIRLIST` refers to formal arguments in function definitions—more on this below—and `CALL` to function calls. Function calls capture everything more complicated than the first three options. Since everything in R that does anything is considered a function call, including such statements as function definitions and control structures, these are captured in the `CALL` case. As we saw above, calls are list-like and always have at least one element. The first element is the function that is called, and the remaining components are the arguments to that function.
+Of the meta-variables, `CONSTANT` refers to any literal data such as numbers or strings, `NAME` to any variable name, `PRIMTIVE` refers to a function written in C as part of the implementation of R, `PAIRLIST` refers to formal arguments in function definitions—more on this below—and `CALL` to function calls. Function calls capture everything more complicated than the first four options. Since everything in R that does anything is considered a function call, including such statements as function definitions and control structures, these are captured in the `CALL` case. As we saw above, calls are list-like and always have at least one element. The first element is the function that is called, and the remaining components are the arguments to that function.
 
-To recursively explore an expression we can write functions that test the four cases. Constants are recognised by the `is.atomic` function; names by the `is.name` function; pair lists by the `is.pairlist`; and calls by the `is.call` function. A function for printing out an expression’s structure can look like this:
+To recursively explore an expression we can write functions that test the four cases. Constants are recognised by the `is.atomic` function; names by the `is.name` function; primitives by the `is.primitive` function; pair lists by the `is.pairlist`; and calls by the `is.call` function. A function for printing out an expression’s structure can look like this:
 
 ```{r}
 print_expression <- function(expr, indent = "") {
@@ -184,6 +185,9 @@ print_expression <- function(expr, indent = "") {
     if (expr == "") {
       expr <- "MISSING"
     }
+    cat(indent, " - ", expr, "\\n")
+    
+  } else if (is.primitive(expr)) {
     cat(indent, " - ", expr, "\\n")
     
   } else if (is.pairlist(expr)) {
@@ -206,7 +210,7 @@ print_expression <- function(expr, indent = "") {
 }
 ```
 
-Here, we do not explicitly test for the type of calls—if the expression is not one of the first three cases it must be the fourth. There are two special cases we handle in this printing expression—source references for function definitions and missing expressions in pair lists. We discuss these below.
+Here, we do not explicitly test for the type of calls—if the expression is not one of the first four cases it must be the fifth. There are two special cases we handle in this printing expression—source references for function definitions and missing expressions in pair lists. We discuss these below.
 
 We can see the function in action by calling it on the expression we explored above:
 
