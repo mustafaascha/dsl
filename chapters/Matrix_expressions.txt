@@ -1,13 +1,21 @@
 
 # Matrix expressions {#sec:matrix-expressions}
 
-In the next chapter we discuss computer languages in a more theoretical way, but first, we will consider a concrete case---the matrix expressions mentioned in the introduction. This example is a relatively simple domain specific language, but parsing matrix expressions, optimising them, and then evaluating them, captures all the phases we usually have to implement in any DSL and the implementation will also have examples of most of the techniques we will cover in more detail later. The example will use some tricks that I will not explain until later in the book, so some aspects might not be evident at this point, but the broader strokes should be, and will hopefully serve as a sneak peek of what follows in future chapters.
+In the next chapter we discuss computer languages in a more theoretical way, but first, we will consider a concrete case—the matrix expressions mentioned in the introduction. This example is a relatively simple domain specific language, but parsing matrix expressions, optimising them, and then evaluating them, captures all the phases we usually have to implement in any DSL and the implementation will also have examples of most of the techniques we will cover in more detail later. The example will use some tricks that I will not explain until later in the book, so some aspects might not be evident at this point, but the broader strokes should be, and will hopefully serve as a sneak peek of what follows in future chapters.
 
-Our goal for writing a language for matrix expressions is to improve upon the default performance the built-in matrix expressions have. We achieve this by taking a more global view of expressions that R does---R will handle each operator one at a time from left to right, but we will analyse expressions and rearrange them to improve performance. The steps we must take to do this are these: 
+Our goal for writing a language for matrix expressions is to improve upon the default performance the built-in matrix expressions have. We achieve this by taking a more global view of expressions that R does—R will handle each operator one at a time from left to right, but we will analyse expressions and rearrange them to improve performance. The steps we must take to do this are these: 
 
 1. parse expressions into data that we can manipulate,
 2. rearrange the expressions into more efficient expressions, and finally, 
 3. provide a way to evaluate the expressions.
+
+The source code for this chapter is available on GitHub at 
+In this chapter, we use the following library:
+
+```{r}
+library(microbenchmark)
+```
+
 
 ## Parsing expressions
 
@@ -85,7 +93,7 @@ With these, we can write the same expression more familiarly:
 m(A) * m(B) + m(C)
 ```
 
-I have put some assertions in the operators to make sure that the dimensions of the matrices involved in operators are valid. We *could* also have placed these in the constructor functions, but later on, we will manipulate expressions where we know that the dimensions are valid, so we do not need to check them there. We do not expect a user to call the constructors directly but use the operators, so this is the natural place to put the checks.
+I have put some assertions—the alls to `stopifnot()`—into the code for the operators to make sure that the dimensions of the matrices involved in operators are valid. We *could* also have placed these in the constructor functions, but later on, we will manipulate expressions where we know that the dimensions are valid, so we do not need to check them there. We do not expect a user to call the constructors directly but use the operators, so this is the natural place to put the checks.
 
 We use the `dim` function for the sanity check in the addition operator, so we need a version of this that works on matrix expressions. It could look like this:
 
@@ -101,37 +109,40 @@ You might be wondering why we need the `m` function. After all, it does not cont
 A * B + C
 ```
 
-we would be invoking the operators for R's matrix class instead. And since `*` is not matrix multiplication, for that you need to use `%*%`---the `*` operator is component-wise multiplication---you get an error.
+we would be invoking the operators for R's matrix class instead. And since `*` is not matrix multiplication, for that you need to use `%*%`—the `*` operator is component-wise multiplication—you get an error.
 
 We need a way of bootstrapping us from R's matrices to the matrices in our expression language. That is what we use `m` for.
 
 ### Meta-programming parsing
 
-Using an explicit function such as `m` to bootstrap us into the matrix expression language is the simplest way to use R's own parser for our benefits, but it is not the only way. In R, we can manipulate expressions as if they were data, a feature known as *meta-programming*, and something we return to in [Chapter @sec:parsing_and_manipulating_expressions]. For now, it suffices to know that an expression can be recursively explored. We can use the predicate `is.name` to check if the expression refers to a variable, and we can use the predicate `is.call` to check if it is a function call---and all operators are function calls. So, given an expression that does not use the `m` function, and thus does not enter our DSL, we can transform it into one that goes like this:
+Using an explicit function such as `m` to bootstrap us into the matrix expression language is the simplest way to use R's own parser for our benefits, but it is not the only way. In R, we can manipulate expressions as if they were data, a feature known as *meta-programming*, and something we return to in [Chapter @sec:parsing_and_manipulating_expressions]. For now, it suffices to know that an expression can be explored recursively. We can use the predicate `is.name` to check if the expression refers to a variable, and we can use the predicate `is.call` to check if it is a function call—and all operators are function calls. So, given an expression that does not use the `m` function, and thus does not enter our DSL, we can transform it into one that goes like this:
 
 ```{r}
 build_matrix_expr <- function(expr) {
-  if (is.name(expr)) 
-    return(substitute(m(name), list(name = expr)))
-  
-  if (is.call(expr)) {
-    if (expr[[1]] == as.name("(")) 
-      return(build_matrix_expr(expr[[2]]))
-    if (expr[[1]] == as.name("*") || expr[[1]] == as.name("%*%"))
-      return(call('*', 
-                  build_matrix_expr(expr[[2]]), 
-                  build_matrix_expr(expr[[3]])))
-    if (expr[[1]] == as.name("+"))
-      return(call('+', 
-                  build_matrix_expr(expr[[2]]), 
-                  build_matrix_expr(expr[[3]])))
+  if (is.name(expr)) {
+      return(substitute(m(name), list(name = expr)))
   }
   
+  if (is.call(expr)) {
+      if (expr[[1]] == as.name("(")) 
+        return(build_matrix_expr(expr[[2]]))
+      if (expr[[1]] == as.name("*") || 
+          expr[[1]] == as.name("%*%")) {
+          return(call('*', 
+                      build_matrix_expr(expr[[2]]), 
+                      build_matrix_expr(expr[[3]])))
+      }
+      if (expr[[1]] == as.name("+")) {
+          return(call('+', 
+                      build_matrix_expr(expr[[2]]), 
+                      build_matrix_expr(expr[[3]])))
+      }
+  }
   stop(paste("Parse error for", expr))
 }
 ```
 
-In this implementation, we consider both `*` and `%*%` matrix multiplication, so that we would consider an R expression that uses matrix multiplication as such. Notice also that we consider calls that are parentheses. Parentheses are also function calls in R, and if we want to allow our language to use parentheses, we have to deal with them---as here, where we just continue the recursion. We did not have to worry about that when we explicitly wrote expressions using `m` and operator overloading because there R already took care of giving parentheses the right semantics.
+In this implementation, we consider both `*` and `%*%` matrix multiplication, so that we would consider an R expression that uses matrix multiplication as such. Notice also that we consider calls that are parentheses. Parentheses are also function calls in R, and if we want to allow our language to use parentheses, we have to deal with them—as here, where we just continue the recursion. We did not have to worry about that when we explicitly wrote expressions using `m` and operator overloading because there R already took care of giving parentheses the right semantics.
 
 For this function to work, it needs a so-called "quoted" expression. If we write a raw expression in R, then R will try to evaluate it before we can manipulate it. We will get an error before we even get to rewrite the expression.
 
@@ -220,9 +231,9 @@ Our goal for writing this matrix DSL is to optimise evaluation of these matrix e
 We can rewrite expressions recursively, and use a generic function with specialisations for the three concrete classes we have, a template (that does not do anything yet) would look like this:
 
 ```{r}
-rearrange_matrix_expr <- function(expr) 
+rearrange_matrix_expr <- function(expr) {
   UseMethod("rearrange_matrix_expr")
-
+}
 rearrange_matrix_expr.matrix_data <- function(expr) {
   expr
 }
@@ -252,7 +263,7 @@ N_{i,j} = \\min_k \\left\\{ N_{i,k} + N_{k+1,j} + \\mathrm{nrow}(A_i)\\times\\ma
 $$
 otherwise. Actually computing this recursively will involve recomputing the same values many times, but using dynamic programming we can compute the $N_{i,j}$ table efficiently, and from that table we can backtrack and find the optimal way of setting parentheses as well.
 
-In the implementation below, we assume that we have such a list of matrices as input. We then collect their dimensions in a table, `dims`, for easy access. Then, we simply create a table, to represent the $N_{i,j}$ values and fill it using the equation above. Once we have filled the table, we call a backtracking function to give us the optimal way of multiplying together the matrices from 1 to `n`, given the dimensions, table and matrices.
+In the implementation below, we assume that we have such a list of matrices as input. We then collect their dimensions in a table, `dims`, for easy access. Then, we simply create a table, to represent the $N_{i,j}$ values and fill it using the equation above. Once we have filled the table, we backtrack through it to work out the optimal way of multiplying together the matrices from 1 to `n`, given the dimensions, table and matrices.
 
 ```{r}
 arrange_optimal_matrix_mult <- function(matrices) {
@@ -271,6 +282,8 @@ arrange_optimal_matrix_mult <- function(matrices) {
     }
   }
   
+  # Backtrack through the table. This function will
+  # be defined shortly.
   backtrack_matrix_mult(1, n, dims, N, matrices)  
 }
 ```
