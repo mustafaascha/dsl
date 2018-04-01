@@ -20,9 +20,8 @@ CHAPTERS := 000_header.txt \
 
 # while editing...
 CHAPTERS := 000_header.txt \
-						Introduction.txt \
-						\
-						Matrix_expressions.txt \
+						Components_of_a_language.txt \
+						#Introduction.txt
 
 
 SOURCE_CHAPTERS := $(foreach chapter,$(CHAPTERS),chapters/$(chapter))

@@ -2,9 +2,14 @@
 
 While this is not a book about compilers and computer languages in general, it will be helpful to have some basic understanding of the components of software that parse and manipulate computer languages—or at least domain specific computer languages.
 
-When we write software for processing languages, we usually structure this such that the input gets manipulated in distinct phases from the raw input text to the desired result, a result that is often running code or some desired data structures. When processing an embedded DSL, however, there is not necessarily a clear separation between parsing your DSL, manipulating expressions in the language, and evaluating them. In many cases, embedded DSLs describe a series of operations that should be executed sequentially—this is, for example, the case with graphical transformations in `ggplot2` or data transformations in `magrittr` and `dplyr`. When this is the case, you wouldn’t necessarily split evaluations of DSL expressions into a parsing phase and an evaluation phase; you can perform transformations one at a time as they are seen by the R parser. Conceptually, though, there are still two steps involved—parsing a DSL statement and evaluating it—and you have to be explicit about this with more complex DSL. Even with simple DSLs, however, there are benefits to keeping the different processing phases separate. It introduces some overhead in programming as you need to represent the input language in some explicit form before you can implement its semantics, but it also allows you to separate the responsibility of the various processing phases into separate software modules, making those easier to implement and test.
+When we write software for processing languages, we usually structure this such that the input gets manipulated in distinct phases from the raw input text to the desired result, a result that is often running code or some desired data structures. When processing an embedded DSL, however, there is not necessarily a clear separation between parsing your DSL, manipulating expressions in the language, and evaluating them. In many cases, embedded DSLs describe a series of operations that should be executed sequentially—this is, for example, the case with graphical transformations in `ggplot2` or data manipulation in `magrittr` and `dplyr`. When this is the case, you wouldn’t necessarily split evaluations of DSL expressions into a parsing phase and an evaluation phase; you can perform transformations one at a time as they are seen by the R parser. Conceptually, though, there are still two steps involved—parsing a DSL statement and evaluating it—and you have to be explicit about this with more complex DSL. Even with simple DSLs, however, there are benefits to keeping the different processing phases separate. It introduces some overhead in programming as you need to represent the input language in some explicit form before you can implement its semantics, but it also allows you to separate the responsibility of the various processing phases into separate software modules, making those easier to implement and test.
 
-This chapter describes the various components of computer languages and the phases involved in processing a domain specific language. 
+This chapter describes the various components of computer languages and the phases involved in processing a domain specific language. We will use the following packages:
+
+```{r}
+library(magrittr) # for the %>% operator
+library(Matrix)   # for the `exam` function
+```
 
 
 ## Text, tokens, grammars, and semantics
@@ -90,7 +95,9 @@ EXPRESSION > EXPRESSION '*' EXPRESSION                        (3)
 
 Which lets us construct the expression `(2 + 2) * 3` from the rules.
 
-If there are different ways to go from meta-variables to the same sequence of terminal rules (there are rules that lead to the exact sequence of lexical tokens), then we have a problem with interpreting the language. The exact same sequence of tokens could be interpreted as specifying two different grammatical objects. For the expression grammar, we have ambiguities when we have expressions such as `2 + 2 * 3`. We can parse this in two different ways, depending on which rules we apply to get from the meta-variable `EXPRESSION` to the concrete expression. We can apply multiplication first and get what amounts to `(2 + 2) * 3`, or we can apply the addition rule first and get `2 + (2 * 3)`. We know from the traditional mathematical notation that we should get the second expression, as multiplication has higher precedence than addition, so the `*` symbol binds 2 and 3 together tighter than `+` does 2 and 2, but the grammar does not guarantee this. The grammar is ambiguous.
+If there are different ways to go from meta-variables to the same sequence of terminal rules (there are rules that lead to the exact sequence of lexical tokens), then we have a problem with interpreting the language. The exact same sequence of tokens could be interpreted as specifying two different grammatical objects. For the expression grammar, we have ambiguities when we have expressions such as `2 + 2 * 3`. We can parse this in two different ways, depending on which rules we apply to get from the meta-variable `EXPRESSION` to the concrete expression. We can apply multiplication first and get what amounts to `(2 + 2) * 3`, or we can apply the addition rule first and get `2 + (2 * 3)`. We know from the traditional mathematical notation that we should get the second expression, as multiplication has higher precedence[^precedence] than addition, so the `*` symbol binds 2 and 3 together tighter than `+` does 2 and 2, but the grammar does not guarantee this. The grammar is ambiguous.
+
+[^precedence]: "Operator precedence" is a term we use to describe how "tightly" different operators bind, i.e., which operators are invoked before others, or put in another way, where we implicitly set parentheses in an expression. Multiplication binds tighter than addition—has a higher precedence—so the expression `2*x + 4*y` is interpreted as `(2*x) + (4*y)` rather than for example `2*(x + (4*y))`. Precedence also tells us whether operators are evaluated left-to-right or right-to-left, so `x + y + z` is evaluated as `(x + y) + z` rather than `x + (y + z)` because `+` evaluates left-to-right. For addition, the left-to-right or right-to-left order doesn't matter because we will end up with the same result, but for some operators it does, for example exponentiation, which is evaluated left to right. So `x**y**z` is `x**(y**z)` which (usually) is different from `(x**y)**z`. If you use operators in a domain-specific language, the precedence of the operators will affect your language.
 
 It is possible to fix this by changing the grammar to this:
 
@@ -153,10 +160,9 @@ add_edge <- function(dag, from, to) {
 add_edge(add_edge(dag(), "foo", "bar"), "bar", "baz")
 ```
 
-Using the pipe operator from `Magritte` might be even more readable, though, for people familiar with it.
+Using the pipe operator from `magrittr` might be even more readable, though, for people familiar with it.
 
 ```r
-library(magrittr)
 dag() %>% add_edge("foo", "bar") %>% add_edge("bar", "baz")
 ```
 
@@ -225,13 +231,18 @@ If we always make our parsing code construct a parse tree, then the next step in
 
 Executing the DSL is sometimes straightforward and can be done as a final traversal of the parse tree. This is what we did with the matrix expressions where the purpose of the DSL was to rewrite expressions rather than evaluate them—the latter being a simple matter of multiplying and adding matrices. In other cases, it makes sense to separate the semantic model and the DSL by having a framework for the actions we want the language to execute. Having a framework for the semantics of the language lets us develop and test the semantic model separately from the language we use as an interface for it; it even allows us to have different input languages for manipulating the same semantic model—not that I would recommend having many different languages to achieve the same goals.
 
-To illustrate this, we can consider a language for specifying a finite state continuous time Markov chain (CTMC). I choose this example because we have already implemented several versions of a finite state system when we implemented the graph DSL—for a CTMC we just have to associate rates with all the edges. Continuous time Markov chains are used many places in mathematical modelling, and mostly comes down to specifying an instantaneous rate matrix. This is a matrix that specifies the rate at which we move from one state to another. Such a matrix should have non-negative values on all off-diagonal entries, and on the diagonal, we should have minus the sum of the other entries in the rows. In a framework where we use CTMCs we would likely implement the functionality to work on rate matrices, but for specifying the CTMCs, a domain specific language might be easier to use.
+To illustrate this, we can consider a language for specifying a finite state continuous time Markov chain (CTMC).[^CTMC] I choose this example because we have already implemented several versions of a finite state system when we implemented the graph DSL—for a CTMC we just have to associate rates with all the edges. Continuous time Markov chains are used many places in mathematical modelling, and mostly comes down to specifying an instantaneous rate matrix. This is a matrix that specifies the rate at which we move from one state to another. Such a matrix should have non-negative values on all off-diagonal entries, and on the diagonal, we should have minus the sum of the other entries in the rows. In a framework where we use CTMCs we would likely implement the functionality to work on rate matrices, but for specifying the CTMCs, a domain specific language might be easier to use.
+
+[^CTMC]: If you are not familiar with *continuous time Markov chains* an informal description could be this: A CTMC is a graph where nodes represent states and edges transitions between states, and each edge is annotated with the rate at which changes happen. The model is stochastic, so rates should be thought of as expectations of change over time. If we have a rate of 1 between states $s$ and $t$, then for each time unit, we would expect to see one change from $s$ to $t$.
+		If we want to know the probability of being in state $t$ at some time $\\tau$ if we are in state $s$ at time $=0$, we cannot consider the states $s$ and $t$ in isolation. There might be other states we can go to from $s$ and if we go to those it might take longer or shorter time to reach $t$, or there might be states we can continue to from $t$ so we might go *through* $t$ before time $\\tau$ but no longer be there. We have to take all edges and all rates into account. Figuring out the probability of being at state $t$ at time $\\tau$ is therefore dependent on matrix operations, in particular matrix exponentiation.
 
 Calling it the “semantics” of the language to translate a graph specifications into a matrix might be stretching the word, but if we consider the DSL as a way of specifying models and the (imagined) framework that manipulates them as part of the language, then I think we can justify it. Using the language will consist of specifying the CTMC, translating it into the corresponding rate matrix, and then manipulating it as intended. The language part of it is the translation from the specification into a matrix.
 
 As for the graphs above, we need to specify the edges in the chain. We need to have a rate associated with each edge, so the most natural syntax will be the pipe version—with this version it is simpler to specify three values for an edge, the *"from-"* and *"to"*-state and the *rate*. I will keep these in three different linked lists, just because it makes it easier to construct the matrix this way.
 
-```{r, echo=FALSE}
+We reuse these two functions we wrote in the previous chapter:
+
+```{r}
 cons <- function(car, cdr) list(car = car, cdr = cdr)
 lst_length <- function(lst) {
   len <- 0
@@ -252,6 +263,8 @@ lst_to_list <- function(lst) {
   v
 }
 ```
+
+We then define the following functions for specifying CTMCs:
 
 ```{r}
 ctmc <- function() 
@@ -291,8 +304,6 @@ rate_matrix <- function(ctmc) {
 }
 ```
 
-The `lst_to_list` function is the one from the previous chapter that translates a linked list into an R list.
-
 Constructing a CTMC rate matrix using this small language is now as simple as this:
 
 ```{r}
@@ -300,21 +311,14 @@ Q <- ctmc() %>%
   add_edge("foo", 1, "bar") %>% 
   add_edge("foo", 2, "baz") %>% 
   add_edge("bar", 2, "baz") %>% 
-  rate_matrix
+  rate_matrix()
 Q
 ```
 
 Once we have translated the CTMC into this matrix, we can consider the language design over. However, integrating CTMC construction and the operations that we can do on a CTMC will be important for ease-of-use of the DSL and can be considered part of the language as well. In this particular case, the good news is that the actual language design is done for us. The pipe operator tells us how to combine our CTMCs with further processing—we just have to write functions that can be used in a pipe. For example, if we want to know the transition probabilities of the CTMC over a time interval—i.e. we want to know the probability of going from any one state to any other over a given time—we can add a function for that. The probabilities can be computed using matrix exponentiation (if you are not familiar with CTMC theory, just trust me on this). To make such a function compatible with a pipeline, we simply have to make the most likely data to come from the left in a pipe the first argument of the function. So we could write this: 
 
-```{r, echo=FALSE}
-suppressPackageStartupMessages(library(expm, quietly = TRUE))
-transitions_over_time <- function(Q, t) expm(Q * t)
-```
-```{r, eval=FALSE}
-library(expm)
-transitions_over_time <- function(Q, t) expm(Q * t)
-```
 ```{r}
+transitions_over_time <- function(Q, t) expm(Q * t)
 P <- Q %>% transitions_over_time(0.2)
 P
 ```
@@ -352,7 +356,7 @@ ctmc() %>%
   add_edge("foo", 1, "bar") %>% 
   add_edge("foo", 2, "baz") %>% 
   add_edge("bar", 2, "baz") %>% 
-  rate_matrix %>%
+  rate_matrix() %>%
   evolve(0.2, probs)
 ```
 
