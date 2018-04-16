@@ -20,7 +20,7 @@ CHAPTERS := 000_header.txt \
 
 # while editing...
 CHAPTERS := 000_header.txt \
-						Components_of_a_language.txt \
+						Functions_expressions_operators.txt \
 						#Introduction.txt
 
 

@@ -362,11 +362,11 @@ Operator      Usual meaning
 `<-` `<<-`    Assignment (right to left)
 `?`           Help
 
-Of these, you cannot overload the “arrow” assignment operators, only the `:=` operator.
+Of these, you cannot overload the “arrow” assignment operators, only the `:=` operator.^[The last operator in the table, the `:=` assignment operator, is special in the list. It is not really an operator that is defined in R. You cannot use it as an assignment operator—for that, you should use `<-` or `->`—but the R parser recognises it as an infix operator which means that you can use it when you design a domain-specific language.]
 
 In the graph specifications language from the previous chapter, we could use addition and `%=>%` together because user-defined infix operators—those defined using percentages symbols—have higher precedence than `+`, so we would construct edges before we would add them to a graph. Using `>` and `|` together works for the same reason. Further, because addition (as well as logical or) is evaluated from left to right, the `dag()` object we created at the beginning of a graph specification would be added to the first edge, which would produce another graph that then would be added to the next edge and so forth. If the evaluation of addition were right-to-left, we would be adding edges to edges, instead of graphs to edges, which would complicate the implementation of the parser.
 
-The last operator in the table, the `:=` assignment operator, is special in the list. It is not really an operator that is defined in R. You cannot use it as an assignment operator—for that, you should use `<-` or `->`—but the R parser recognises it as an infix operator which means that you can use it when you design a domain-specific language.
+
 
 
 
