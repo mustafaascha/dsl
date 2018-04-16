@@ -20,7 +20,7 @@ CHAPTERS := 000_header.txt \
 
 # while editing...
 CHAPTERS := 000_header.txt \
-	Parsing_and_manipulating_expressions.txt \
+	Lambda.txt \
 	#Introduction.txt
 
 

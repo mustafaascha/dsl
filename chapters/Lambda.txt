@@ -2,6 +2,16 @@
 
 With the techniques we have seen so far, we are now able to implement some useful domain-specific languages.  In this chapter, we examine a toy example, lambda-expressions. It is perhaps not something we would use in real-world code, as it simply gives an alternative syntax to anonymous functions, which are already supported in R. However, it is an excellent example of code which is potentially useful and gives us a chance to experiment with syntax.
 
+We will use the `rlang` package:
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(rlang, quietly = TRUE))
+```
+```{r}
+library(rlang)
+```
+
+
 ## Lambda expressions
 
 Lambda expressions are anonymous functions, i.e., functions we have not named. We already have anonymous functions in R. It is the default kind of functions since a function is anonymous until we assign it to a variable. If we do not wish to save a function in a variable to get access to it later, we can just use the `function` expression to create it where we need it. For example, to map over a vector of numbers, we could write:
