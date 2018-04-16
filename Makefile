@@ -20,26 +20,26 @@ CHAPTERS := 000_header.txt \
 
 # while editing...
 CHAPTERS := 000_header.txt \
-						Functions_expressions_operators.txt \
-						#Introduction.txt
+	Parsing_and_manipulating_expressions.txt \
+	#Introduction.txt
 
 
 SOURCE_CHAPTERS := $(foreach chapter,$(CHAPTERS),chapters/$(chapter))
 
 all: book.pdf
 
-book.pdf: $(SOURCE_CHAPTERS) Makefile pdf_book/Makefile templates/latex-template.tex
+book.pdf: $(SOURCE_CHAPTERS)  chapters/000_knitr_header.Rmd Makefile pdf_book/Makefile templates/latex-template.tex
 	(cd pdf_book && make CHAPTERS="$(CHAPTERS)")
 	cp pdf_book/book.pdf book.pdf
 
-book.epub:  $(SOURCE_CHAPTERS) Makefile ebook/Makefile
+book.epub:  $(SOURCE_CHAPTERS) chapters/000_knitr_header.Rmd Makefile ebook/Makefile
 	(cd ebook && make CHAPTERS="$(CHAPTERS)")
 	cp ebook/book.epub book.epub
 
 #book.mobi: book.epub
 #	./kindlegen book.epub -o book.mobi
 
-book.docx: $(SOURCE_CHAPTERS) Makefile pdf_book/Makefile templates/latex-template.tex
+book.docx: $(SOURCE_CHAPTERS) chapters/000_knitr_header.Rmd Makefile pdf_book/Makefile templates/latex-template.tex
 	(cd pdf_book && make book.docx CHAPTERS="$(CHAPTERS)")
 	cp pdf_book/book.docx book.docx
 

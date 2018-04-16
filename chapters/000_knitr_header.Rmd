@@ -1,6 +1,6 @@
 ```{r, echo=FALSE, warning=FALSE}
-#suppressPackageStartupMessages(library(ggplot2, quietly = TRUE))
-#suppressPackageStartupMessages(library(knitr, quietly = TRUE))
+suppressPackageStartupMessages(library(ggplot2, quietly = TRUE))
+suppressPackageStartupMessages(library(knitr, quietly = TRUE))
 #suppressPackageStartupMessages(library(rlang, quietly = TRUE))
 #suppressPackageStartupMessages(library(microbenchmark, quietly = TRUE))
 #suppressPackageStartupMessages(library(magrittr, quietly = TRUE))
@@ -18,22 +18,8 @@ knit_hooks$set(plot = function(x, options) {
 })
 
 
-#ifdef PDF
 opts_chunk$set(fig.width=4, fig.height=4,
                fig.pos="t", dev="pdf")
-theme_set(theme_bw() +
-    theme(axis.text.x = element_text(size = 6),
-          strip.text = element_text(size = 8)))
-
-#else
-opts_chunk$set(fig.width=4, fig.height=4,
-               dpi=300, dev="png")
-theme_set(theme_bw() +
-    theme(axis.text.x = element_text(size = 6),
-          strip.text = element_text(size = 8)))
-
-#endif
-
 
 options(width = 50,
         str = strOptions(vec.len = 3,
@@ -44,7 +30,7 @@ set.seed(5)
 Sys.setenv(LANG = "en")
 
 
-
+#if 0
 cons <- function(car, cdr) list(car = car, cdr = cdr)
 lst_length <- function(lst) {
   len <- 0
@@ -64,6 +50,6 @@ lst_to_list <- function(lst) {
   }
   v
 }
-
+#endif
 
 ```

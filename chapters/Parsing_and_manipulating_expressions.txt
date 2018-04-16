@@ -2,6 +2,19 @@
 
 A powerful feature of the R programming language is that it readily allows us to treat expressions in the language itself as data that we can examine and modify as part of a program—so-called “meta-programming”. From within a program we can take a piece of R code and computationally manipulate it before we evaluate it. We need to get hold of the code *before* it is evaluated and there are several ways to do that. The simplest is to “quote” expressions, which leaves them as unevaluated expressions.
 
+In this chapter, we will use the following libraries:
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(rlang, quietly = TRUE))
+suppressPackageStartupMessages(library(purrr, quietly = TRUE))
+suppressPackageStartupMessages(library(magrittr, quietly = TRUE))
+```
+```{r}
+library(purrr)
+library(rlang)
+library(magrittr)
+```
+
 ## Quoting and evaluating
 
 If you write an expression such as
@@ -244,9 +257,10 @@ expr[[1]]
 expr[[2]]
 ```
 
-As an example of doing something non-trivial with expressions, we can write a function that collects all unbound variables in an expression.  If we recurse through an expression, we can collect all the bound and unbound symbols. To get the unbound variables, we can keep track of those that are bound and not collect those. Ignoring, at first, those variables that might be bound outside of the expression itself—in the scope where we will call the function—the variables that are bound are those that are named in a function definition. We can identify those from the pair list that is the second argument to calls to `function`. When recursing over expressions, we capture those and pass them on down the recursion. Aside from that, we simply collect the symbols. In the implementation below I use the linked lists, we have seen earlier to collect the symbols, and I translate the symbols into characters as I collect them. I do this because I can use the character representation of symbols to check if a symbol exists in an environment later on.
+As an example of doing something non-trivial with expressions, we can write a function that collects all unbound variables in an expression.  If we recurse through an expression, we can collect all the bound and unbound symbols. To get the unbound variables, we can keep track of those that are bound and not collect those. Ignoring, at first, those variables that might be bound outside of the expression itself—in the scope where we will call the function—the variables that are bound are those that are named in a function definition. We can identify those from the pair list that is the second argument to calls to `function`. When recursing over expressions, we capture those and pass them on down the recursion. Aside from that, we simply collect the symbols. In the implementation below I use the linked lists, we have seen earlier to collect the symbols, and I translate the symbols into characters as I collect them. I do this because I can use the character representation of symbols to check if a symbol exists in an environment later on. I use the `cons` function to collect symbols in a linked list.
 
 ```{r}
+cons <- function(car, cdr) list(car = car, cdr = cdr)
 collect_symbols_rec <- function(expr, lst, bound) {
   if (is.symbol(expr) && expr != "") {
     if (as.character(expr) %in% bound) lst
@@ -273,6 +287,29 @@ collect_symbols_rec <- function(expr, lst, bound) {
 }
 ```
 
+For processing the lists, it is easier to work with `list` than linked-lists objects, so we need the `lst_to_list` function from earlier as well:
+
+```{r}
+lst_length <- function(lst) {
+  len <- 0
+  while (!is.null(lst)) {
+    lst <- lst$cdr
+    len <- len + 1
+  }
+  len
+}
+lst_to_list <- function(lst) {
+  v <- vector(mode = "list", length = lst_length(lst))
+  index <- 1
+  while (!is.null(lst)) {
+    v[[index]] <- lst$car
+    lst <- lst$cdr
+    index <- index + 1
+  }
+  v
+}
+```
+
 We explicitly avoid the empty symbol when we collect symbols. The empty symbol is the symbol we get when we recurse on a pair list for a function parameter without a default value. We do not consider this a variable, bound or otherwise. The way we handle symbols is straightforward. For pair lists, we collect the parameters that will be bound and recurse through the default arguments to collect any unbound variables there. As for calls, we handle the function definitions by extending the list of bound variables and then recursing. For anything else—which in practice mean for any atomic value—we just return the list we called the function with. There are no unbound variables in constant values, after all.
 
 The recursive function works on a quoted expression and collects all symbols that are not bound within the expression itself. We wrap it in a function that does the quoting of the expression, call the recursive function, and then remove the symbols that are defined in the calling scope (the `parent.frame`).
@@ -282,9 +319,9 @@ collect_symbols <- function(expr) {
   expr <- substitute(expr)
   bound <- c()
   lst <- collect_symbols_rec(expr, NULL, bound)
-  lst %>% lst_to_list %>% unique %>% 
+  lst %>% lst_to_list() %>% unique() %>% 
           purrr::discard(exists, parent.frame()) %>%
-          unlist
+          unlist()
 }
 ```
 
@@ -341,9 +378,9 @@ We will explore environments and how to program with non-standard evaluation in 
 collect_symbols_ <- function(expr, env) {
   bound <- c()
   lst <- collect_symbols_rec(expr, NULL, bound)
-  lst %>% lst_to_list %>% unique %>% 
+  lst %>% lst_to_list() %>% unique() %>% 
     purrr::discard(exists, env) %>%
-    unlist
+    unlist()
 }
 collect_symbols <- function(expr) {
   collect_symbols_(substitute(expr), parent.frame())
