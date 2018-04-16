@@ -2,6 +2,16 @@
 
 We have already used environments in a couple of examples to evaluate expressions in a different context than where we usually evaluate them, which is known as *non-standard evaluation*. Many domain-specific languages that we could implement in R will need some variety of non-standard evaluation, but getting the evaluation to occur in the right context can be problematic. The rules for how expressions are evaluated are simple, but the way evaluation contexts, which are chains of environments, can be complicated.
 
+We will use the `rlang` package:
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(rlang, quietly = TRUE))
+```
+```{r}
+library(rlang)
+```
+
+
 ## Scopes and environments
 
 R evaluates an expression in a *scope* that determines which value any given variable refers to. In the standard evaluation, R uses what is known as *lexical scope*. This essentially means that variables in an expression are referring to the variables defined in the blocks around the expression. If you write an expression at the outermost level of an R script, or in the *global environment*, then variable names in the expression refer to global variables. An expression inside a function, on the other hand, is evaluated in the scope of a function execution, which means that variable symbols refer to local variables or function parameters if these are defined; only if they are not defined do they refer to global variables. A function defined inside another function will have a *nested scope*—variables in an expression there will first be searched for in the innermost function, then the surrounding function, and only if they are not found either place, in the global environment.
