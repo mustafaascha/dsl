@@ -2,6 +2,20 @@
 
 The so-called [“tidyverse”](https://www.tidyverse.org) refers to a number of R packages designed to work well together and based on similar designs that can all be considered domain-specific languages in themselves. These packages include `dplyr`, `tidyr` and `ggplot2` and mainly consist of functions that do non-standard evaluation. The way they manage non-standard evaluation is consistent among the packages and based on what they call “tidy evaluation”, which primarily relies on two features implemented in the `rlang` package: quosures and quasi-quotation.
 
+We will use the `rlang` package once more, but to make it explicit when we use this package and not basic R non-standard evaluation I will usually use fully qualified names, i.e. I will write `rlang::quo` instead of `quo` and not load the package. We will also use the `purrr` package, but here as well I will use fully qualified names. I *will* load `magrittr` to get the pipeline operator, however, and the `tibble` and `dplyr` packages for working with data frames.
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(magrittr, quietly = TRUE))
+suppressPackageStartupMessages(library(dplyr, quietly = TRUE))
+suppressPackageStartupMessages(library(tibble, quietly = TRUE))
+```
+```{r}
+library(magrittr)
+library(dplyr)
+library(tibble)
+```
+
+
 ## Quosures
 
 The `rlang` package provided functions to replace `quote` and `substitute` that create quosures—expressions based on formulas that carry with them their environment—instead of expressions. To create a quosure from an expression, you use `quo`:
@@ -121,6 +135,8 @@ but not with quosures
 rlang::eval_tidy(quo(xx), env = list2env(list(xx = 5:8)))
 ```
 
+The `list2env` function I have used here translate a list into an environment—as strongly hinted by the name. It is a quick way to construct an environment and populate it with variables.
+
 If you want to create a closure with over-scoping, i.e. you want to create a function that evaluates a quosure where it first finds local variables and then look in the quosure’s environment, you cannot directly call `eval_tidy` when creating the function. This would ask R to attempt to evaluate the closure, but you do not yet have the variables you need—those are provided when you call the closure. Instead, you can separate the bare expression and the environment of the quosure using `get_expr` and `get_env`, respectively. Consider the function `make_funciton` below:
 
 ```{r}
@@ -157,7 +173,7 @@ h(x = 1:4, y = 1:4)
 
 However, consider a more involved example, where we collect expressions in a list and have a function for translating all the expressions into functions that we can then apply over values using the `invoke_map` function from the `purrr` package. We can construct the expressions like this, using the linked lists structure we have previously used:
 
-```{r, echo=FALSE}
+```{r}
 cons <- function(elm, lst) list(car=elm, cdr=lst)
 lst_length <- function(lst) {
   len <- 0
@@ -221,9 +237,11 @@ The expressions know the intercept when we call `make_line_expressions`—that i
 ```{r}
 eval_line <- function(ex, coef) {
   ex %>% make_functions(alist(coef=)) %>%
-    purrr::invoke_map(coef = coef) %>% unlist
+    purrr::invoke_map(coef = coef) %>% unlist()
 }
 ```
+
+The `invoke_map` function is very similar to the various `map` functions from `purrr`, but instead of mapping a function over several values, it takes a sequence of functions and apply each to a value.
 
 We can now pipe these functions together to get points on a line:
 
@@ -277,12 +295,12 @@ f(x, y, z)
 
 ## Quasi-quoting
 
-The final topic of this chapter involves *quasi-quoting*, which simply means that we create quoted expression where we do not quote *everything* but evaluate some parts of expressions. When we directly call functions that do non-standard evaluation, we can usually provide expressions exactly as we want them, but as soon as we start using such non-standard evaluation functions in programs where we call them from other functions, we need some flexibility in how we construct expressions. We can do this with meta-programming where we modify `call` objects, but a better approach is implemented in the `rlang` package, the so-called *quasi-quoting*.
+The final topic of this chapter involves *quasi-quoting*. This is a mechanism by which we can work with quoted expressions but at the same time substitute some parts of the expression by the value that sub-expressions evaluate to. When we directly call functions that do non-standard evaluation, we can usually provide expressions exactly as we want them, but as soon as we start using such non-standard evaluation functions in programs where we call them from other functions, we need some flexibility in how we construct expressions. We can do this with meta-programming where we modify `call` objects, but a better approach is implemented in the `rlang` package, the so-called *quasi-quoting*.
 
 Consider a simple, but not unrealistic, example. We have a data frame, and we want to filter away rows where a given column has missing data. We can do this using `dplyr`’s `filter` function like this:
 
 ```{r}
-df <- tibble::tribble(
+df <- tribble(
   ~x, ~y,
    1,  1,
   NA,  2,
@@ -306,13 +324,7 @@ filter_on_na <- function(df, column) {
 df %>% filter_on_na(x)
 ```
 
-We use `substitute` to translate the column name into a symbol and then apply the `filter` pipeline. It doesn’t work, of course
-
-```{r}
-df %>% filter_on_na(x)
-```
-
-and the reason is just that `filter` does non-standard evaluation as well and translate the predicate `!is.na(column)` into this exact expression. So it needs to know the variable `column`. Now, since `filter` evaluates its argument as a quosure, it *can* find the variable `column`, but it finds that this is a symbol—it is, in this case, the symbol `x`—but that is not what we want it to see. We want `filter` to see the column `x`, but that is not how `filter` works.
+We use `substitute` to translate the column name into a symbol and then apply the `filter` pipeline. It doesn’t work, of course and the reason is just that `filter` does non-standard evaluation as well and translate the predicate `!is.na(column)` into this exact expression. So it needs to know the variable `column`. Now, since `filter` evaluates its argument as a quosure, it *can* find the variable `column`, but it finds that this is a symbol—it is, in this case, the symbol `x`—but that is not what we want it to see. We want `filter` to see the column `x`, but that is not how `filter` works.
 
 What we want to do is to substitute the symbol held in the variable `column` into the expression/quosure that `filter` sees. We can do this with the “bang-bang” operator `!!`:
 
@@ -327,7 +339,7 @@ df %>% filter_on_na(y)
 
 This operator unquotes the following expression, evaluate it, and put the result into the quoted expression that `filter` sees. So the value of `column`, rather than the symbol `column`, gets insert into `!is.na(!!column)``.
 
-You will have noticed that I used a different function to create the quoted column name. In the `rlang` package there are two functions that behave like `quote` and `substitute` in that they create bare expressions, but they allow quasi-quoting with the bang-bang operator, something `substitute`, and `quote` do not. Consider the functions `f` and `g` defined like this:
+You will have noticed that I used a different function, `rlang::enexpr`, to create the quoted column name. In the `rlang` package there are two functions that behave like `quote` and `substitute` in that they create bare expressions, but they allow quasi-quoting with the bang-bang operator, something `substitute`, and `quote` do not. Consider the functions `f` and `g` defined like this:
 
 ```{r}
 f <- function(x) substitute(x)
@@ -353,15 +365,16 @@ rlang::expr(2 * x + !!y)
 rlang::quo(2 * x + !!y)
 ```
 
-You have to be a little bit careful when using the bang-bang operator. It is built from the negation operator, `!`, which has a very low precedence. The only operators with lower precedence are the logical operators and assignments. This means that if you try to unquote `x` in the expression `x + y`, you will, in fact, be unquoting the entire expression if you simply write `!!x + y`. You only get `!!` bound to only `x` if the operator you use in the expression is a logical operator.
+You have to be a little bit careful when using the bang-bang operator, depending on which version of the `rlang` package you use. It is built from the negation operator, `!`, which has a very low precedence. The only operators with lower precedence are the logical operators and assignments. This means that if you try to unquote `x` in the expression `x + y`, you might, in fact, be unquoting the entire expression if you simply write `!!x + y`. You only get `!!` bound to only `x` if the operator you use in the expression is a logical operator.
+
+If you try to evaluate this express, you will see if you have an old version or a new version of the package. If you have an old version, the first expression will evaluate `x + y` since `!` has lower precedence than `+`; if you have a newer version of `rlang`, then only the value of `x` will be substitute in.
 
 ```{r}
 x <- y <- 2
 rlang::expr(!!x + y)
-rlang::expr(!!x & y)
 ```
 
-You can get around this problem using parentheses, or you can use the function-variant of unquoting, `UQ`:
+The most recent version of the package, at the time of writing, has resolved this; instead of relying on R's precedence rules, it will examine the expression before it evaluates unquoted expressions, and it gives the bang-bang operator a much tighter precedence than the negation operator has.  If you do not have the latest version of the package, however, you can get around this problem using parentheses, or you can use the function-variant of unquoting, `UQ`:
 
 ```{r}
 rlang::expr(UQ(x) + y)
@@ -383,7 +396,7 @@ f <- function(df, summary_name, summary_expr) {
   summary_expr <- rlang::enquo(summary_expr)
   df %>% mutate(UQ(summary_name) := UQ(summary_expr))
 }
-tibble::tibble(x = 1:4, y = 1:4) %>% f(z, x + y)
+tibble(x = 1:4, y = 1:4) %>% f(z, x + y)
 ```
 
 The named function call in 
@@ -426,7 +439,7 @@ mean_expr <- function(ex, ...) {
   extra_args <- rlang::dots_list(...)
   mean_call <- rlang::expr(with(
       data,
-      mean(!!get_expr(ex), !!!extra_args))
+      mean(!!rlang::get_expr(ex), !!!extra_args))
   )
   rlang::new_function(args = alist(data=), 
                       body = mean_call,

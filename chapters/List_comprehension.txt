@@ -55,6 +55,8 @@ in Python or
 ```
 in Haskell is what we call list comprehension. List comprehensions consist of three components, first an expression that will be evaluated for each element in the list (or lists if we use more than one), then one or more lists to map over, and finally zero or more predicates we use to filter over. It is thus a combination of `Map` and `Filter` calls in one expression.
 
+
+
 Using non-standard evaluation, we can write an R function that provides a similar list comprehension syntax. We will write it such that its first argument must be an expression that we evaluate for all elements in the input list(s) and such that its remaining elements either identify lists or predicates. We will use named arguments to identify when an argument defines a list and unnamed arguments for predicates.
 
 The function will work as follows: we take the first argument and make it into a quosure, so we have the expression plus the environment we define it in. We do the same with the rest of the arguments, captured by the three-dots parameter since we want the function to take an arbitrary number of arguments. We create the first quosure with `enquo` and the list of additional arguments with `quos`. These, we then split into list arguments and predicates based on whether they are named arguments or not. While doing this, we evaluate the named arguments to get the data in the input lists and extract the expressions for the predicates using `get_expr`.

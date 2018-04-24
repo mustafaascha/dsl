@@ -27,7 +27,11 @@ balance <- function(tree) {
 This function is mere eight lines, compared to the 42 lines of code used in *Functional Data Structures in R*, where I also use some pattern matching tricks but not a domain-specific language uniquely designed for it. Such a language is what we will implement in this chapter.
 
 For the chapter, we need to will use the following packages:
-
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(magrittr, quietly = TRUE))
+suppressPackageStartupMessages(library(rlang, quietly = TRUE))
+suppressPackageStartupMessages(library(dplyr, quietly = TRUE))
+```
 ```r
 library(rlang)
 library(magrittr)
@@ -43,6 +47,8 @@ make_args_list <- function(args) {
   as.pairlist(res)
 }
 ```
+
+For a package that implements the functionality described in this chapter, and more, see [https://mailund.github.io/pmatch/](https://mailund.github.io/pmatch/).
 
 ## Constructors
 
@@ -124,18 +130,19 @@ The `process_alternatives` function recursively parse the expression to get all 
 process_constructor <- function(constructor, 
                                 data_type_name,
                                 env) {
-  if (is_lang(constructor))
+  if (is_lang(constructor)) {
     process_constructor_function(
       constructor,
       data_type_name,
       env
     )
-  else
+  } else {
     process_constructor_constant(
       constructor,
       data_type_name,
       env
     )
+  }
 }
 ```
 
@@ -291,6 +298,11 @@ L(1L)
 An alternative solution could be to specify more than one type in the specification. If you are interested, you can play with that. I will just leave it here and move on to pattern matching.
 
 ## Pattern matching
+
+```{r, echo=FALSE}
+#install.packages("pmatch")
+suppressPackageStartupMessages(library(pmatch, quietly = TRUE))
+```
 
 We want to implement pattern matching such that an expression like this
 

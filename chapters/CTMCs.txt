@@ -1,18 +1,25 @@
 # Continuous-time Markov chains
 
-We now turn to an example of a domain-specific language where we combine tidy evaluation and the `magrittr` pipe operator. We will write a language for specifying continuous-time Markov chains (CTMCs) and for computing the likelihood of parameters in such CTMCs given a trace of which states the chain is in at different time points.
+We now turn to an example of a domain-specific language where we combine tidy evaluation and the `magrittr` pipe operator. We will write a language for specifying continuous-time Markov chains (CTMCs) and for computing the likelihood of parameters in such CTMCs given a trace of which states the chain is in at different time points. As with the list comprehension example in the previous chapter, we are not going to use operators to create a new syntax for the language but will create a DSL by providing functions that can be strung together to construct "sentences".
 
-We will use the packages `magrittr` and `rlang` to construct the language 
+We will use the packages `magrittr` and `rlang` to construct the language, `tibble` for data frames and the `expm` package for matrix exponentiation
 
-
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(magrittr, quietly = TRUE))
+suppressPackageStartupMessages(library(rlang, quietly = TRUE))
+suppressPackageStartupMessages(library(tibble, quietly = TRUE))
+suppressPackageStartupMessages(library(expm, quietly = TRUE))
+```
 ```r
 library(magrittr)
 library(rlang)
+library(tibble)
+library(expm)
 ```
 
 and we will reuse the linked list code plus the functions `collect_symbols_rec` and `make_args_list` we implemented in previous chapters.
 
-```{r, echo=FALSE}
+```{r}
 cons <- function(car, cdr) list(car = car, cdr = cdr)
 lst_length <- function(lst) {
   len <- 0
@@ -71,9 +78,9 @@ We will use these functions to construct functions from a CTMC specification by 
 collect_symbols_q <- function(expr, env) {
   bound <- c()
   lst <- collect_symbols_rec(expr, NULL, bound)
-  lst %>% lst_to_list %>% unique %>%
+  lst %>% lst_to_list() %>% unique() %>%
     purrr::discard(exists, env) %>%
-    unlist
+    unlist()
 }
 ```
 
@@ -134,11 +141,11 @@ Generally, it is a good idea to be able to get some information about an object 
 
 ```{r}
 print.ctmc <- function(x, ...) {
-  from <- lst_to_list(x$from) %>% rev
-  to <- lst_to_list(x$to) %>% rev
-  rate <- lst_to_list(x$rate) %>% rev
+  from <- lst_to_list(x$from) %>% rev()
+  to <- lst_to_list(x$to) %>% rev()
+  rate <- lst_to_list(x$rate) %>% rev()
   parameters <- lst_to_list(x$params) %>% 
-    unlist %>% unique %>% rev
+    unlist() %>% unique() %>% rev()
 
   cat("CTMC:\\n")
   cat("parameters:", paste(parameters), "\\n")
@@ -177,13 +184,13 @@ We implement this functionality via a closure. We write a function that extracts
 
 ```{r}
 get_rate_matrix_function <- function(ctmc) {
-  from <- lst_to_list(ctmc$from) %>% rev
-  to <- lst_to_list(ctmc$to) %>% rev
-  rate <- lst_to_list(ctmc$rate) %>% rev
+  from <- lst_to_list(ctmc$from) %>% rev()
+  to <- lst_to_list(ctmc$to) %>% rev()
+  rate <- lst_to_list(ctmc$rate) %>% rev()
 
-  nodes <- c(from, to) %>% unique %>% unlist
+  nodes <- c(from, to) %>% unique() %>% unlist()
   parameters <- lst_to_list(ctmc$params) %>% 
-    unlist %>% unique %>% rev
+    unlist() %>% unique() %>% rev()
 
   n <- length(nodes)
 
@@ -212,21 +219,21 @@ For the actual construction of the rate matrix, there is little to surprise. We 
 We now have a command in our language for getting a rate matrix function:
 
 ```{r}
-Q <- m %>% get_rate_matrix_function
-Q
+Qf <- m %>% get_rate_matrix_function()
+Qf
 ```
 
 When we provide the model parameters to this function, we get the rate matrix:
 
 ```{r}
-Q(a = 2, b = 4)
+Qf(a = 2, b = 4)
 ```
 
-Remember that the edge from `baz` to `qux` holds an expression that refers to the global variable `x`. If we change the value of this variable, we also change the result of evaluating the `Q` function:
+Remember that the edge from `baz` to `qux` holds an expression that refers to the global variable `x`. If we change the value of this variable, we also change the result of evaluating the `Qf` function:
 
 ```{r}
 x <- 1
-Q(a = 2, b = 4)
+Qf(a = 2, b = 4)
 ```
 
 The edge from `qux` to `foo`, where we substitute the value for `x` at the time we created the edge, using `UQ`, does not change.
@@ -268,12 +275,12 @@ As for CTMC objects, we want a printing function for traces. Here, I will take a
 
 ```{r}
 as_tibble.ctmc_trace <- function(x, ...) {
-  states <- x$states %>% lst_to_list %>% unlist %>% rev
-  at <- x$at %>% lst_to_list %>% unlist %>% rev
-  tibble::tibble(state = states, at = at)
+  states <- x$states %>% lst_to_list() %>% unlist() %>% rev()
+  at <- x$at %>% lst_to_list() %>% unlist() %>% rev()
+  tibble(state = states, at = at)
 }
 print.ctmc_trace <- function(x, ...) {
-  df <- tibble::as_tibble(x)
+  df <- as_tibble(x)
   cat("CTMC trace:\\n")
   print(df)
 }
@@ -296,12 +303,7 @@ tr
 
 The final functionality we will implement for this example is for computing the likelihood of parameters given a CTMC and a trace. Back in [Chapter @sec:components], we saw how to translate a rate matrix into a transition-probability matrix by first multiplying the rate matrix by a scalar—the time period that has passed between two observations—and then (matrix-)exponentiating the result. We will reuse the function we implemented there:
 
-```{r, echo=FALSE}
-suppressPackageStartupMessages(library(expm, quietly = TRUE))
-transition_probabilities <- function(Q, t) expm(Q * t)
-```
-```r
-library(expm)
+```{r}
 transition_probabilities <- function(Q, t) expm(Q * t)
 ```
 
@@ -311,8 +313,8 @@ The implementation is straightforward. We get the rate matrix function from the 
 
 ```{r}
 get_likelihood_function <- function(ctmc, trace) {
-  rate_func <- ctmc %>% get_rate_matrix_function
-  trace_df <- tibble::as_tibble(trace)
+  rate_func <- ctmc %>% get_rate_matrix_function()
+  trace_df <- as_tibble(trace)
   
   lhd_function <- function() {
     args <- as_list(environment())
