@@ -3,7 +3,13 @@
 
 This book gives an introduction to embedded domain-specific languages in R. The term *domain-specific languages,* or DSL, refers to programming languages specialised for a particular purpose, as opposed to general purpose programming languages. Domain-specific languages ideally give you a precise way of specifying tasks you want to do and goals you want to achieve, within a specific context. Regular expressions are one example of a domain-specific language, where you have a specialised notation to express patterns of text. You can use this domain-specific language to define text strings to search for or specify rules to modify text. Regular expressions are often considered very hard to read, but they do provide a useful language for describing text patterns. Another example of a domain specific language is SQL---a language specialised for extracting from and modifying a relational database. With SQL, you have a very expressive domain-specific language in which you can specify rules as to which data points in a database you want to access or modify.
 
-Regular expressions and SQL are typically specified as strings when you use them in a program, and these strings must be parsed and interpreted when your program runs. In a sense, they are languages separated from the programming language you use them *in*. They need to be compiled separately and then called by the main programming language. In contrast, *embedded* domain-specific languages provide domain specific languages expressed in the general purpose language in which they are used. In R, the grammar of graphics implemented in `ggplot2` or the data transformation operations implemented in `dplyr` provides small languages---domain-specific languages---that you can use from within R, and you write the programs for these languages in R as well.
+## Who this book is for
+
+This book is aimed at experienced R programmers. Some of the concepts we cover in this book are advanced, so at the very least you should be familiar with functional and object-oriented programming in R (although the next chapter will give you a reminder of the object-oriented programming features we will use). It will be helpful to have some experience with meta-programming when it comes to evaluating expressions in contexts that interact with the surrounding R code. However, [Chapter @sec:env_and_expr] gives a crash course in the techniques we will use in this book, so you should be able to pick it up with a little effort from there.
+
+## Domain-specific languages
+
+With domain-specific languages we often distinguish between "external" and "embedded" languages. Regular expressions and SQL are typically specified as strings when you use them in a program, and these strings must be parsed and interpreted when your program runs. In a sense, they are languages separated from the programming language you use them *in*. They need to be compiled separately and then called by the main programming language. They are therefore considered "external" languages. In contrast, *embedded* domain-specific languages provide domain specific languages expressed in the general purpose language in which they are used. In R, the grammar of graphics implemented in `ggplot2` or the data transformation operations implemented in `dplyr` provides small languages---domain-specific languages---that you can use from within R, and you write the programs for these languages in R as well.
 
 Embedded DSLs extend the programming language in which you are working. They provide more than what you usually find in a framework in the form of functions and classes as they offer a high level of flexibility in what you can do with them. They are programming languages, after all, and you can express complex ideas and tasks in them. They provide a language for expressing thoughts in a specific domain, so they do not give you a general programming language as the language you use them from, but they do extend that surrounding language with new expressive power. However, being embedded in the general-purpose language means that they will follow the rules you are familiar with there. Or mostly, at least, since in languages such as R, it is possible to modify the rules a bit using using so-called *non-standard evaluation*. You can expect the syntax of the embedded DSL to follow the rules of the general purpose language. The semantics will be determined by the DSL, but when you write programs in the DSL, the syntax is already familiar to you. If you implement a DSL yourself, embedding it in a general-purpose language lets you reuse the parsing and evaluation done by the general purpose language so that you can focus on designing the domain-specific language.
 
@@ -78,7 +84,7 @@ matrix_mult <- function(A, B) {
 Of course, we do not want to write expressions as
 
 ```r
-matrix_mult(matrix_mult(m(A), m(B), matrix_mult(m(C), m(D)))
+matrix_mult(matrix_mult(m(A), m(B), matrix_mult(m(C), m(D))))
 ```
 
 so we overload the `*` operator:
@@ -127,6 +133,3 @@ print(res, signif = 3, order = "mean")
 
 The automatic solution is only slightly slower than the optimal solution and about a factor of six better than the default evaluation.
 
-## Who this book is for
-
-This book is aimed at experienced R programmers. Some of the concepts we cover in this book are advanced, so at the very least you should be familiar with functional and object-oriented programming in R (although the next chapter will give you a reminder of the object-oriented programming features we will use). It will be helpful to have some experience with meta-programming when it comes to evaluating expressions in contexts that interact with the surrounding R code. However, [Chapter @sec:env_and_expr] gives a crash course in the techniques we will use in this book, so you should be able to pick it up with a little effort from there.

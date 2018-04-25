@@ -18,9 +18,6 @@ CHAPTERS := 000_header.txt \
 			\
 			xx_conclusions.txt
 
-# while editing...
-CHAPTERS := 000_header.txt \
-Introduction.txt
 
 
 SOURCE_CHAPTERS := $(foreach chapter,$(CHAPTERS),chapters/$(chapter))
