@@ -20,8 +20,7 @@ CHAPTERS := 000_header.txt \
 
 # while editing...
 CHAPTERS := 000_header.txt \
-Environments_and_expressions.txt \
-	#Introduction.txt
+Introduction.txt
 
 
 SOURCE_CHAPTERS := $(foreach chapter,$(CHAPTERS),chapters/$(chapter))

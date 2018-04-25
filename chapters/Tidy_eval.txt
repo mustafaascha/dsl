@@ -18,7 +18,7 @@ library(tibble)
 
 ## Quosures
 
-The `rlang` package provided functions to replace `quote` and `substitute` that create quosures—expressions based on formulas that carry with them their environment—instead of expressions. To create a quosure from an expression, you use `quo`:
+The `rlang` package provided functions to replace `quote` and `substitute` that create quosures—expressions based on formulas that carry with them their environment—instead of quoted expressions. To create a quosure from an expression, you use `quo`:
 
 ```{r}
 q <- rlang::quo(2 * x)
@@ -33,7 +33,7 @@ q <- f(2 * x)
 q
 ```
 
-In both of these examples, the scope associated with the quosure is the global environment because this is the level at which the expression is written.
+In both examples, the scope associated with the quosure is the global environment because this is the level at which the expression is written.
 
 A quosure is just a special type of formula, so we can access one as we did in the previous section to get the environment and expression
 
@@ -48,7 +48,7 @@ but `rlang` provides functions for working with quosures that make the intent of
 rlang::get_expr(q)
 ```
 
-I honestly think the name is a bit unfortunate since the *un*-quote function returns a quoted expression, but it does strip away the quosure-ness and gives us a raw expression. There is another unquote function, `UQ`, that *does* unquote an expression in the sense of evaluating it, but it has a different purpose that we get to in the next section.
+The term is ironic since the *un*-quote function returns a quoted expression, but it does strip away the quosure-ness and gives us a raw expression. There is another unquote function, `UQ`, that *does* unquote an expression in the sense of evaluating it, but it has a different purpose that we get to in the next section.
 
 Getting the environment associated with a quosure can be done using `environment` as we saw above, but the `rlang` function for this is `get_env`:
 
@@ -71,7 +71,7 @@ x <- 2
 rlang::eval_tidy(q)
 ```
 
-The quosure is evaluated inside the environment it is associated with. We created this quosure, `q`, inside function `f`, but its environment is the global environment, so when we modify this, by changing `x`, it affects the result of evaluating `q`.
+The quosure is evaluated inside the environment it is associated with. We created quosure `q` inside function `f`, but its environment is the global environment, so when we modify this, by changing `x`, it affects the result of evaluating `q`.
 
 If we create a quosure inside a local function scope, it will remember this context—just like a closure. For example, if we define function `f` as this
 
@@ -100,7 +100,7 @@ rlang::eval_tidy(q, list(x = 5:8))
 
 The quosure `q` is bound to the global environment, so when we evaluate it, `x` and `y` are both `1:4`. However, when we provide the second argument to `eval_tidy`, we can override the value of `x` to `5:8`. You will recognise this feature from `dplyr` where you have access to columns in data frames in arguments you provide to the functions there, and these columns overrule any global variable that might otherwise have been used.
 
-This, of course, can also be used to override variables in a function call with function parameters. Consider these two functions:
+This can also be used to override variables in a function call with function parameters. Consider these two functions:
 
 ```{r}
 f <- function(expr,x) {
@@ -115,7 +115,7 @@ f(x + y, x = 5:8)
 g(x + y, x = 5:8)
 ```
 
-The function `f` simply evaluates the quosure in its scope, which doesn’t contain the function parameter `x`, while the function `g` over-scopes with the function environment, making the variable `x` refer to the function parameter rather than the global parameter.
+The function `f` evaluates the quosure in its scope, which doesn’t contain the function parameter `x`, while the function `g` over-scopes with the function environment. This makes the variable `x` refer to the function parameter rather than the global parameter.
 
 The expression you evaluate with `eval_tidy` doesn’t have to be a quosure. The function is equally happy to evaluate bare expressions, and then it behaves just like `eval`:
 
@@ -137,7 +137,7 @@ rlang::eval_tidy(quo(xx), env = list2env(list(xx = 5:8)))
 
 The `list2env` function I have used here translate a list into an environment—as strongly hinted by the name. It is a quick way to construct an environment and populate it with variables.
 
-If you want to create a closure with over-scoping, i.e. you want to create a function that evaluates a quosure where it first finds local variables and then look in the quosure’s environment, you cannot directly call `eval_tidy` when creating the function. This would ask R to attempt to evaluate the closure, but you do not yet have the variables you need—those are provided when you call the closure. Instead, you can separate the bare expression and the environment of the quosure using `get_expr` and `get_env`, respectively. Consider the function `make_funciton` below:
+If you want to create a closure with over-scoping, i.e. you want to create a function that evaluates a quosure where it first finds local variables and then look in the quosure’s environment, you cannot directly call `eval_tidy` when creating the function. This would ask R to attempt to evaluate the closure, but you do not yet have the variables you need—those are provided when you call the closure. Instead, you can separate the bare expression and the environment of the quosure using `get_expr` and `get_env`, respectively. Consider the function `make_function` below:
 
 ```{r}
 make_function <- function(args, body) {
@@ -150,11 +150,11 @@ g
 g(x = 1:4, y = 1:4)
 ```
 
-Here, `make_function` takes two arguments, a pair list of arguments and an expression for the body of a function. It is a little more primitive than the lambda expressions we wrote in the previous chapter, but it is essentially doing the same thing, in this example, I am just focusing on the closure we create rather than on language design issues. We translate the function body into a quosure, which guarantees that we have an environment associated with it. In the function we create using `new_function`, however, we strip the environment from the quosure to create the body of the new function, but we assign the function’s environment to be the quosure environment.
+Here, `make_function` takes two arguments, a pair list of arguments and an expression for the body of a function. It is slightly more primitive than the lambda expressions we wrote in the previous chapter, but it is essentially doing the same thing, in this example, I am focusing on the closure we create rather than on language design issues. We translate the function body into a quosure, which guarantees that we have an environment associated with it. In the function we create using `new_function`, however, we strip the environment from the quosure to create the body of the new function, but we assign the function’s environment to be the quosure environment.
 
-In the function `f` we have a local scope that knows the value of `z`, and in this scope, we create a new function. The quosure we get from this is associated with the local `f` scope, so it also knows about `z`. When calling `g` we provide variables `x` and `y`, but the `z` value is taken from the local scope of `f`.
+In the function `f` we have a local scope that knows the value of `z`, and we create a new function in this scope. The quosure we get from this is associated with the local `f` scope, so it also knows about `z`. We provide variables `x` and `y`, when calling `g`, but the `z` value is taken from the local scope of `f`.
 
-Of course, if called directly, there isn’t any difference between using the caller’s environment or the quosure’s environment 
+If called directly, there is no difference between using the caller’s environment or the quosure’s environment 
 
 ```{r}
 make_function_quo <- function(args, body) {
@@ -203,7 +203,7 @@ add_expression <- function(ex, expr) {
 }
 ```
 
-Translating the expressions into functions is straightforward, we just need to reverse the resulting list if we want the functions in the order we add them since we prepend expressions when we use the linked lists:
+Translating the expressions into functions is straightforward. We only need to reverse the resulting list if we want the functions in the order we add them since we prepend expressions when we use the linked lists:
 
 ```{r}
 make_functions <- function(ex, args) {
@@ -251,7 +251,7 @@ make_line_expressions(intercept = 0) %>% eval_line(coef = 2)
 make_line_expressions(intercept = 1) %>% eval_line(coef = 1)
 ```
 
-All works as intended here, but what would happen if we used quotes instead? It is simple to write the corresponding functions:
+Everything works as intended here, but what would happen if we used quotes instead? It is simple to write the corresponding functions:
 
 ```{r}
 add_expression <- function(ex, expr) {
@@ -276,11 +276,11 @@ We will get an error if we try to use them as before, however:
 make_line_expressions(intercept = 0) %>% eval_line(coef = 1)
 ```
 
-The reason for this is straightforward to see once we consider which environments contain information about the intercept. This variable lives in the scope of calls to `make_line_expressions`, but when we create the functions, we do so by calling `make_functions` from inside `eval_line`. The functions are created with `eval_line` local environments as their closures, and `intercept` is not found there.
+The reason for this is obvious once we consider which environments contain information about the intercept. This variable lives in the scope of calls to `make_line_expressions`, but when we create the functions, we do so by calling `make_functions` from inside `eval_line`. The functions are created with `eval_line` local environments as their closures, and `intercept` is not found there.
 
-In general, it is safer to use quosures than bare expressions for non-standard evaluation exactly because they carry their environment along with them, alleviating many of the problems we otherwise have with keeping track of which environment to evaluate expressions in.
+In general, it is safer to use quosures than bare expressions for non-standard evaluation exactly because they carry their environment with them, alleviating the problems we have with keeping track of which environment to evaluate expressions in.
 
-A final thing I want to mention before we move on to the next topic is the function `quos`. This function works as `quo` but for a sequence of arguments that are returned as a list of quosures.
+One thing to mention before we move on to the next topic is the function `quos`. This function works as `quo` but for a sequence of arguments that are returned as a list of quosures.
 
 ```{r}
 rlang::quos(x, y, x+y)
@@ -297,7 +297,7 @@ f(x, y, z)
 
 The final topic of this chapter involves *quasi-quoting*. This is a mechanism by which we can work with quoted expressions but at the same time substitute some parts of the expression by the value that sub-expressions evaluate to. When we directly call functions that do non-standard evaluation, we can usually provide expressions exactly as we want them, but as soon as we start using such non-standard evaluation functions in programs where we call them from other functions, we need some flexibility in how we construct expressions. We can do this with meta-programming where we modify `call` objects, but a better approach is implemented in the `rlang` package, the so-called *quasi-quoting*.
 
-Consider a simple, but not unrealistic, example. We have a data frame, and we want to filter away rows where a given column has missing data. We can do this using `dplyr`’s `filter` function like this:
+Consider this simple example. We have a data frame, and we want to filter away rows where a given column has missing data. We can do this using `dplyr`’s `filter` function like this:
 
 ```{r}
 df <- tribble(
@@ -314,7 +314,7 @@ df %>% dplyr::filter(!is.na(x))
 df %>% dplyr::filter(!is.na(y))
 ```
 
-Here, we are using the same code for two different variables. It is straightforward code so we probably wouldn’t write a function to avoid the duplication, but for more complicated pipelines we would—so for the sake of argument let us just imagine that we want to replace the pipeline with a function. We could attempt to write it like this:
+Here, we use the same code for two different variables. It is a straightforward code so we would not write a function to avoid the duplication, but for more complicated pipelines we would, so for the sake of argument let us imagine that we want to replace the pipeline with a function. We could attempt to write it like this:
 
 ```{r}
 filter_on_na <- function(df, column) {
@@ -324,7 +324,7 @@ filter_on_na <- function(df, column) {
 df %>% filter_on_na(x)
 ```
 
-We use `substitute` to translate the column name into a symbol and then apply the `filter` pipeline. It doesn’t work, of course and the reason is just that `filter` does non-standard evaluation as well and translate the predicate `!is.na(column)` into this exact expression. So it needs to know the variable `column`. Now, since `filter` evaluates its argument as a quosure, it *can* find the variable `column`, but it finds that this is a symbol—it is, in this case, the symbol `x`—but that is not what we want it to see. We want `filter` to see the column `x`, but that is not how `filter` works.
+We use `substitute` to translate the column name into a symbol and then apply the `filter` pipeline. It doesn’t work, of course and the reason is that `filter` does non-standard evaluation as well and translate the predicate `!is.na(column)` into this exact expression. So it needs to know the variable `column`. Now, since `filter` evaluates its argument as a quosure, it *can* find the variable `column`, but it finds that this is a symbol—it is, in this case, the symbol `x`—but that is not what we want it to see. We want `filter` to see the column `x`, but that is not how `filter` works.
 
 What we want to do is to substitute the symbol held in the variable `column` into the expression/quosure that `filter` sees. We can do this with the “bang-bang” operator `!!`:
 
@@ -337,7 +337,7 @@ df %>% filter_on_na(x)
 df %>% filter_on_na(y)
 ```
 
-This operator unquotes the following expression, evaluate it, and put the result into the quoted expression that `filter` sees. So the value of `column`, rather than the symbol `column`, gets insert into `!is.na(!!column)``.
+This operator unquotes the following expression, evaluates it, and puts the result into the quoted expression that `filter` sees. So the value of `column`, rather than the symbol `column`, gets insert into `!is.na(!!column)``.
 
 You will have noticed that I used a different function, `rlang::enexpr`, to create the quoted column name. In the `rlang` package there are two functions that behave like `quote` and `substitute` in that they create bare expressions, but they allow quasi-quoting with the bang-bang operator, something `substitute`, and `quote` do not. Consider the functions `f` and `g` defined like this:
 
@@ -346,7 +346,7 @@ f <- function(x) substitute(x)
 g <- function(x) rlang::enexpr(x)
 ```
 
-Called directly, both will return the expression we give as the parameter `x`, but consider the case where we call them from another function, `h`, where we want to substitute its parameter for the parameter `x`:
+When called directly, both will return the expression we give as the parameter `x`, but consider the case where we call them from another function, `h`, where we want to substitute its parameter for the parameter `x`:
 
 ```{r}
 h <- function(func, var) func(!!var)
@@ -356,7 +356,7 @@ h(g, quote(x))
 
 In `f`, where we use `substitute`, we get the expression `!!var` back, but in function `g`, where we use `enexpr`, we get the substitution done and get the desired result `x`.
 
-The function `enexpr` works like `enquo` to translate function parameters into expressions, but translate them into bare expressions rather than quosures. The analogue to `quo`, that takes an expression directly and create a quosure, we have `expr`, which create a bare expression—like `quote`—but allows quasi-quotation.
+The function `enexpr` works like `enquo` to translate function parameters into expressions, but translate them into bare expressions rather than quosures. The analogue to `quo`, that takes an expression directly and creates a quosure, we have `expr`, which creates a bare expression—like `quote`—but allows quasi-quotation.
 
 ```{r}
 x <- y <- 1
@@ -407,7 +407,7 @@ The named function call in
 
 behaves like a usual function call with named parameters after the quasi-quotation substitution has taken place.
 
-A final quasi-quotation function you must now is `UQS`. This function behaves as `UQ` in that it evaluates its arguments and put the result into a quoted expression, but it is intended for splicing a list of quosures into a function call.
+A final quasi-quotation function you must know is `UQS`. This function behaves as `UQ` in that it evaluates its arguments and put the result into a quoted expression, but it is intended for splicing a list of quosures into a function call.
 
 Consider this example:
 
@@ -424,7 +424,7 @@ q <- rlang::expr(f(rlang::UQ(args)))
 q
 ```
 
-Just as for `UQ`, though, there is an operator version of `UQS`, the triple-bang operator `!!!`
+As for `UQ`, though, there is an operator version of `UQS`, the triple-bang operator `!!!`
 
 ```{r}
 q <- rlang::expr(f(!!!args))
@@ -467,7 +467,7 @@ g
 g(df)
 ```
 
-Using quosures and quasi-quotes alleviate many of the problems you can have with keeping track of environments for non-standard evaluation, and I strongly suggest that you use these instead of the bare R `quote` and `substitute` approach. They do not, however, fix the problem with deciding when to quote arguments and with calling functions that translate arguments into expressions. If you call a function that uses `enquo` from a function where you have already quoted the argument, then you get it double-quoted:
+Using quosures and quasi-quotes add to the problems you can have with keeping track of environments for non-standard evaluation. I strongly suggest that you use these instead of the bare R `quote` and `substitute` approach. They do not, however, fix the problem with deciding when to quote arguments and with calling functions that translate arguments into expressions. If you call a function that uses `enquo` from a function where you have already quoted the argument, then you get it double-quoted:
 
 ```{r}
 f <- function(expr) rlang::enquo(expr)
