@@ -408,7 +408,7 @@ make_pattern_match <- function(pattern, range_vars) {
     matches <- vector("list", length = length(range_vars))
     stopifnot(pattern[[1]] == "[")
     for (i in seq_along(matches)) {
-        matches[[i]] <- call(#rlang::call2(
+        matches[[i]] <- call(
             "==",
             pattern[[i + 2]],
             range_vars[[i]]

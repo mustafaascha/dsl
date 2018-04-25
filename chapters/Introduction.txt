@@ -33,7 +33,120 @@ For each multiplication, you produce a new matrix that will be used in the next 
 
 Now, matrix multiplication is associative, so you should be able to set the parentheses in any way, as long as you respect the left-to-right order of the matrices (matrix multiplication is not commutative, after all), and you will get the same result. The running time, however, will not be the same. We can do a small experiment to see this using the `microbenchmark` package:
 
-```{r, cache=TRUE}
+```{r, echo=FALSE}
+## Parsing #######################################################
+m <- function(data) {
+  structure(data, 
+            nrow = nrow(data),
+            ncol = ncol(data),
+            def_expr = deparse(substitute(data)),
+            class = c("matrix_data", "matrix_expr", class(data)))
+}
+matrix_mult <- function(A, B) {
+  structure(list(left = A, right = B),
+            nrow = nrow(A),
+            ncol = ncol(B),
+            class = c("matrix_mult", "matrix_expr"))
+}
+
+
+`*.matrix_expr` <- function(A, B) {
+  matrix_mult(A, B)
+}
+
+
+
+## Helper functions ##############################################
+dim.matrix_expr <- function(x) {
+  c(attr(x, "nrow"), attr(x, "ncol"))
+}
+
+toString.matrix_expr <- function(x, ...) {
+  paste0("[", attr(x, "def_expr"), "]")
+}
+toString.matrix_mult <- function(x, ...) {
+  paste0("(", toString(x$left), " * ", toString(x$right), ")")
+}
+print.matrix_expr <- function(x, ...) {
+  print(toString(x))
+}
+
+
+
+
+## Evaluating ####################################################
+backtrack_matrix_mult <- function(i, j, dims, tbl, matrices) {
+  if (i == j) {
+    matrices[[i]]
+  } else {
+    k <- i:(j - 1)
+    candidates <- dims[i,1]*dims[k,2]*dims[j,2] + tbl[i,k] + tbl[k + 1,j]
+    split <- k[which(tbl[i,j] == candidates)][1]
+    left <- backtrack_matrix_mult(i, split, dims, tbl, matrices)
+    right <- backtrack_matrix_mult(split + 1, j, dims, tbl, matrices)
+    matrix_mult(left, right)
+  }
+}
+
+arrange_optimal_matrix_mult <- function(matrices) {
+  n <- length(matrices)
+  dims <- matrix(0, nrow = n, ncol = 2)
+  for (i in seq_along(matrices)) {
+    dims[i,] <- dim(matrices[[i]])
+  }
+  
+  tbl <- matrix(0, nrow = n, ncol = 4)
+  for (len in 2:n) {
+    for (i in 1:(n - len + 1)) {
+      j <- i + len - 1
+      k <- i:(j - 1)
+      tbl[i,j] <- min(dims[i,1]*dims[k,2]*dims[j,2] + tbl[i,k] + tbl[k + 1,j])
+    }
+  }
+  
+  backtrack_matrix_mult(1, n, dims, tbl, matrices)  
+}
+
+count_mult_components <- function(expr) UseMethod("count_mult_components")
+count_mult_components.default <- function(expr) 1
+count_mult_components.matrix_mult <- function(expr)
+  count_mult_components(expr$left) + count_mult_components(expr$right)
+
+collect_basic_matrices <- function(matrix_expr) {
+  n <- count_mult_components(matrix_expr)
+  matrices <- vector("list", length = n)
+  i <- 1
+  collect <- function(matrix_expr) {
+    if (inherits(matrix_expr, "matrix_mult")) {
+      collect(matrix_expr$left)
+      collect(matrix_expr$right)
+    } else {
+      matrices[[i]] <<- matrix_expr
+      i <<- i + 1
+    }  
+  }
+  collect(matrix_expr)
+  matrices
+}
+
+rearrange_matrix_expr <- function(expr) UseMethod("rearrange_matrix_expr")
+rearrange_matrix_expr.default <- function(expr) expr
+rearrange_matrix_expr.matrix_mult <- function(expr) {
+  matrices <- collect_basic_matrices(expr)
+  arrange_optimal_matrix_mult(matrices)
+}
+
+eval_matrix_expr <- function(expr) UseMethod("eval_matrix_expr")
+eval_matrix_expr.matrix_expr <- function(expr) expr
+eval_matrix_expr.matrix_mult <- function(expr) {
+  eval_matrix_expr(expr$left) %*% eval_matrix_expr(expr$right)
+}
+
+## Forcing evaluation... #######################################
+v <- function(expr) eval_matrix_expr(rearrange_matrix_expr(expr))
+```
+
+```{r first-matrix-bm, cache=FALSE}
 A <- matrix(1, nrow = 400, ncol = 300)
 B <- matrix(1, nrow = 300, ncol = 30)
 C <- matrix(1, nrow = 30, ncol = 500)
@@ -111,9 +224,6 @@ except that the former expression only constructs a data structure representing 
 
 When we need to evaluate a matrix multiplication, we want to analyse the delayed evaluation and rearrange the multiplication to get the optimal performance. In [Chapter @sec:matrix-expressions] we will implement the functions `rearrange_matrix_mult` and `eval_matrix_mult` that does this. Here, we just define a function, `v`, for evaluating a matrix multiplication:
 
-```{r, echo=FALSE}
-source("../R/Expressions/introduction-matrix-expressions.R")
-```
 
 ```{r}
 v <- function(expr)
@@ -122,7 +232,7 @@ v <- function(expr)
 
 We can compare this automatic parenthesis setting procedure with the default evaluation and the optimal evaluation order we saw above:
 
-```{r, cache=FALSE}
+```{r second-matrix-bm, cache=FALSE}
 res <- microbenchmark(A %*% B %*% C %*% D,
                       (A %*% B) %*% (C %*% D),
                       v(m(A) * m(B) * m(C) * m(D)))
