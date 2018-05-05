@@ -1,0 +1,117 @@
+# Domain-specific languages in R
+
+In a few weeks, my next book—*Domain-specific languages in R*—will be published. This is a book that describes how you can create your own embedded domain specific languages to extend the expression power you have when you implement algorithms or analysis pipelines in R.
+
+The term *domain-specific languages,* or DSL, refers to programming languages specialised for a particular purpose, as opposed to general purpose programming languages. Domain-specific languages ideally give you a precise way of specifying tasks you want to do and goals you want to achieve, within a specific context. Regular expressions are one example of a domain-specific language, where you have a specialised notation to express patterns of text. You can use this domain-specific language to define text strings to search for or specify rules to modify text. Regular expressions are often considered very hard to read, but they do provide a useful language for describing text patterns. Another example of a domain specific language is SQL---a language specialised for extracting from and modifying a relational database. With SQL, you have a very expressive domain-specific language in which you can specify rules as to which data points in a database you want to access or modify.
+
+With domain-specific languages we often distinguish between "external" and "embedded" languages. Regular expressions and SQL are typically specified as strings when you use them in a program, and these strings must be parsed and interpreted when your program runs. In a sense, they are languages separated from the programming language you use them *in*. They need to be compiled separately and then called by the main programming language. They are therefore considered "external" languages. In contrast, *embedded* domain-specific languages provide domain specific languages expressed in the general purpose language in which they are used. In R, the grammar of graphics implemented in `ggplot2` or the data transformation operations implemented in `dplyr` provides small languages---domain-specific languages---that you can use from within R, and you write the programs for these languages in R as well.
+
+Embedded DSLs extend the programming language in which you are working. They provide more than what you usually find in a framework in the form of functions and classes as they offer a high level of flexibility in what you can do with them. They are programming languages, after all, and you can express complex ideas and tasks in them. They provide a language for expressing thoughts in a specific domain, so they do not give you a general programming language as the language you use them from, but they do extend that surrounding language with new expressive power. However, being embedded in the general-purpose language means that they will follow the rules you are familiar with there. Or mostly, at least, since in languages such as R, it is possible to modify the rules a bit using using so-called *non-standard evaluation*. You can expect the syntax of the embedded DSL to follow the rules of the general purpose language. The semantics will be determined by the DSL, but when you write programs in the DSL, the syntax is already familiar to you. If you implement a DSL yourself, embedding it in a general-purpose language lets you reuse the parsing and evaluation done by the general purpose language so that you can focus on designing the domain-specific language.
+
+In my book, I describe various techniques you can use for write your own embedded domain-specific languages. One example of a language I describe is for pattern matching data structures.
+
+## A pattern matching DSL
+
+In languages such as ML or Haskell, you can define data types by specifying functions you will use to construct values of any given type. In itself, that is not that interesting, but combined with a pattern matching feature of these languages, you can write very succinct functions for transforming data structures.
+
+```{r, echo=FALSE}
+library(pmatch)
+```
+
+For a package that implements the functionality described here, and more, see [https://mailund.github.io/pmatch/](https://mailund.github.io/pmatch/).
+
+### Constructors
+
+The key feature of this domain-specific language is the type constructors—how we define values of a given type. The pattern matching aspect of the DSL will consist of nested constructor calls, so it is how we define the constructors that is the essential aspect of the language.
+
+Here, we are inspired by function calls. We will use a syntax for constructors that matches variables and function calls:
+
+```
+TYPEDEF ::= TYPENAME ':=' CONSTUCTORS
+CONSTUCTORS ::= CONSTUCTOR | CONSTUCTOR '|' CONSTRUCTORS
+CONSTRUCTOR ::= NAME | NAME '(' ARGS ')'
+ARGS ::= ARG | ARG ',' ARGS
+ARG ::= NAME | NAME : TYPE
+TYPENAME ::= NAME
+```
+
+We define a new type by giving it a name, to the left of a `:=` operator, and by putting a sequence of constructors on the right of the `:=` operator. Constructors, then, are separated by `|` and are either single names or a name followed by arguments in parentheses, where an argument is either a single name or a name followed by ':' and then a type, where we require that a type is a name.
+
+We implement this grammar by implementing the `:=` operator. An assignment has the lowest precedence, which means that whatever we write to the left or right of this operator will be arguments to the function. We do not have to worry about an expression in our language being translated into some `call` object of a different type. We cannot override the other assignment operators, `<-`, `->` and `=`, so we have to use `:=`. Since this is also traditionally used to mean “defined to be equal to”, it works quite well.
+
+The approach we take in implementing this part of the pattern matching DSL is different from the examples we have seen earlier. We do not create a data structure that we can analyse nor do we evaluate expressions directly from expressions in our new language. Instead, we combine parsing expressions with code generation—we generate new functions and objects while we parse the specification. We add these functions, and other objects for constants, to the environment in which we call `:=`. Adding these objects to this environment allows us to use the constructors after we have defined them with no further coding, but it does mean that calling `:=` will have side-effects.
+
+The construction function will expect a type name as its left-hand-side parameter and an expression describing the different ways of constructing elements of the type on its right-hand side. We will translate the left-hand side into a quosure because we want to get its associated environment. The right-hand side we will turn into an expression. For the construction specification, we do not want to evaluate any of the elements (unless the user invokes quasi-quotations). The left-hand side—the type we are defining—is just treated as a string, since that is how the S3 system deals with types. The right-hand side we have to parse.
+
+The expression on the right-hand side of `:=` defines how we construct elements of the new type. We allow there to be more than one way to do this, and we separate the various choices using the or-operator `|`. This approach resembles how we describe different alternatives when we specify a grammar, so it is a natural choice.
+
+As an example of using the construction language we can define a binary tree as either a tree with a left and right sub-tree or a leaf:
+
+```{r}
+tree := T(left : tree, right : tree) | L(value : numeric)
+```
+
+We can use the constructors to create a tree:
+
+```{r}
+x <- T(T(L(1),L(2)),L(3))
+x
+```
+
+Values we create using these constructors can be accessed just as lists—which, in fact, they are—using the variable names we used in the type specification:
+
+```{r}
+x$left$left$value
+x$left$right$value
+x$right$value
+```
+
+The type checking is rather strict, however. We demand that the values we pass to the constructor functions are of the types we give in the specification—in the sense that they must inherit the class from the specification—and this can be a problem in some cases where R would otherwise ordinarily just convert values. In the specification for the `L` constructor, for example, we require that the argument is `numeric`. We will get an error if we give it an `integer`:
+
+```{r}
+L(1L)
+```
+
+This situation is where we can use the variant of parameters without a type:
+
+```{r}
+tree := T(left : tree, right : tree) | L(value)
+L(1L)
+```
+
+An alternative solution could be to specify more than one type in the specification. If you are interested, you can play with that. I will just leave it here and move on to pattern matching.
+
+### Pattern matching
+
+We want to implement pattern matching such that an expression like this
+
+```{r}
+cases(L(1),
+      L(v) -> v,
+      T(L(v), L(w)) -> v + w,
+      otherwise -> 5)
+```
+
+should return 1, since the pattern `L(v)` matches the value `L(1)` and we return `v`, which we expect to be bound to 1. Likewise, we want this expression to return nine since `v` should be bound to 4 and `w` to 5 and we return the result of evaluating `v + w`.
+
+```{r}
+cases(T(L(4), L(5)),
+      L(v) -> v,
+      T(L(v), L(w)) -> v + w,
+      otherwise -> 5)
+```
+
+We want the `otherwise` keyword to mean anything at all and use it as a default pattern, so in this expression, we want to return five.
+
+```{r}
+cases(T(L(1), T(L(4), L(5))),
+      L(v) -> v,
+      T(L(v), L(w)) -> v + w,
+      otherwise -> 5)
+```
+
+The syntax for pattern matching uses the right-arrow operator. This operator is usually an assignment. We cannot specialise arrow assignments, but we can still use them in a meta-programming function. We use an assignment operator for the same reasons as we had for using the `:=` operator for defining types. Since assignment operators have the lowest precedence, we don’t have to worry about how tight the operators to the left and right of the operator binds. We could also have used that operator here, but I like the arrow more for this function. It shows us what different patterns map to. You need to be careful with the `->` operator, though, since it is syntactic sugar for `<-`. This means that once we have an expression that uses `->`, we will actually see a call to `<-` and the left- and right-hand sides will be switched.
+
+The `cases` function will take a variable number of arguments. The first is the expression we match against, and the rest are captured by the three-dots operator. The expressions there should not be evaluated directly, so we capture them as quosures. We then iterate through them, split them into left-hand and right-hand sides, and test the left-hand side against the expression. The function we use for testing the pattern will return an environment that contains bound variables if it matches, and `NULL` otherwise. If we have a match, we evaluate the right-hand side in the quosure environment over-scoped by the environment we get from matching the pattern.
+
+To see how we implement constructor specifications and pattern matching, get [*Domain-specific languages in R*](https://www.apress.com/de/book/9781484235874).
